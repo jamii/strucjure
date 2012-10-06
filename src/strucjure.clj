@@ -358,6 +358,20 @@
          (for [[pattern-syntax value] (partition 2 patterns&values)]
            [(pattern pattern-syntax) value])))
 
+;; USER API
+
+(defmacro match [& patterns&values]
+  `(->Match ~(compile (parse patterns&values))))
+
+(defmacro defmatch [name & patterns&values]
+  `(def ~name
+     (match ~@patterns&values)))
+
+(defmacro defnmatch [name args & patterns&values]
+  `(def ~name
+     (fn [~@args]
+       (match ~@patterns&values))))
+
 ;; tests
 
 (deftest self-describing

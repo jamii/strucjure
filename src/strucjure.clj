@@ -7,6 +7,10 @@
 ;; PEG parser / pattern matcher
 ;; (originally based on matchure)
 
+;; A pattern takes an input and a set of bindings, consumes some or all of the input and returns new bindings
+;; A match takes an input, consumes some or all of the input and returns a value
+;; A match is constructed from a list of [pattern value] pairs, where the value forms have access to the patterns bindings
+
 ;; TODO
 ;; fix match indentation in emacs
 ;; better error/failure reporting
@@ -14,14 +18,9 @@
 ;; provide syntax for matching dicts, records, classes, regexes
 ;; try to reduce allocation of false-thunks
 ;; replace true-thunk with (if-let [[...] (or ...)] ...)
-;; add a README
 ;; think about extensibility and memoization
 ;; defmatch name [args] pattern -> def name (eval `(fn [~@args] ~(match* pattern)))
 ;; eventually can push fn [args] through as many lets as possible
-
-;; A pattern takes an input and a set of bindings, consumes some or all of the input and returns new bindings
-;; A match takes an input, consumes some or all of the input and returns a value
-;; A match is constructed from a list of [pattern value] pairs
 
 ;; UTILS FOR CODEGEN
 

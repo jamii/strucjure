@@ -1,0 +1,6 @@
+build/
+classes/
+lib/
+target/
+pom.xml
+.lein-failures

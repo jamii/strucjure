@@ -71,7 +71,7 @@
 (defprotocol Ast
   "An Abstract Syntax Tree for a pattern."
   (ast->clj* [this input bindings true-case false-case]
-    "Output code which tests the pattern against input with the supplied bindings. If the pattern succeeds, call true case with the remaining input and the new bindings (fn [rest bindings] code). Otherwise call the false-case thunk."))
+    "Output code which tests the pattern against input with the supplied bindings. If the pattern succeeds, call true case with the remaining input and the new bindings (true-case is (fn [rest bindings] code)). Otherwise call the false-case (false-case is code referencing a thunk)."))
 
 (defn ast->clj [ast input bindings true-case false-case]
   (ast->clj* ast input bindings true-case false-case))
@@ -341,6 +341,9 @@
   '[;; & PATTERNS
     (and (guard (seq? %)) ['& (pattern ?pattern)]) pattern
 
+    ;; ESCAPED PATTERNS
+    (and (guard (seq? %)) ['guard ?form]) (->Guard form)
+
     ;; ALL OTHER PATTERNS
     (pattern ?pattern) (->Head pattern)])
 
@@ -350,7 +353,7 @@
 )
 
 ;; bootstrapped as (parse seq-pattern-syntax)
-(def seq-pattern-ast '[#strucjure.And{:patterns [#strucjure.Guard{:form (seq? %)} #strucjure.Seq{:patterns (#strucjure.Guard{:form (or (sequential? %) (nil? %))} #strucjure.Leave{:form (clojure.core/seq %)} #strucjure.Head{:pattern #strucjure.Literal{:literal '&}} #strucjure.Head{:pattern #strucjure.Import{:match pattern, :pattern #strucjure.Bind{:symbol pattern}}} #strucjure.Guard{:form (nil? %)})}]} pattern #strucjure.Import{:match pattern, :pattern #strucjure.Bind{:symbol pattern}} (->Head pattern)])
+(def seq-pattern-ast '[#strucjure.And{:patterns (#strucjure.Guard{:form (seq? %)} #strucjure.Seq{:patterns (#strucjure.Guard{:form (or (sequential? %) (nil? %))} #strucjure.Leave{:form (clojure.core/seq %)} #strucjure.Head{:pattern #strucjure.Literal{:literal (quote &)}} #strucjure.Head{:pattern #strucjure.Import{:match pattern, :pattern #strucjure.Bind{:symbol pattern}}} #strucjure.Guard{:form (nil? %)})})} pattern #strucjure.And{:patterns (#strucjure.Guard{:form (seq? %)} #strucjure.Seq{:patterns (#strucjure.Guard{:form (or (sequential? %) (nil? %))} #strucjure.Leave{:form (clojure.core/seq %)} #strucjure.Head{:pattern #strucjure.Literal{:literal (quote guard)}} #strucjure.Head{:pattern #strucjure.Bind{:symbol form}} #strucjure.Guard{:form (nil? %)})})} (->Guard form) #strucjure.Import{:match pattern, :pattern #strucjure.Bind{:symbol pattern}} (->Head pattern)])
 
 (declare seq-pattern)
 (def pattern (->Match (eval (compile pattern-ast))))

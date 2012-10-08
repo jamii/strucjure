@@ -15,13 +15,13 @@
 ;; TODO
 ;; fix match indentation in emacs
 ;; better error/failure reporting
-;; special-case zero-or-more, one-or-more, optional
-;; provide syntax for matching dicts, records, classes, regexes
+;; provide syntax for matching dicts, records, regexes
 ;; try to reduce allocation of false-thunks
 ;; replace true-thunk with (if-let [[...] (or ...)] ...)
 ;; think about extensibility and memoization
-;; defmatch name [args] pattern -> def name (eval `(fn [~@args] ~(match* pattern)))
-;; eventually can push fn [args] through as many lets as possible
+
+;; pile of thunks codegen method
+;; defnmatch can add args to bindings so not expensive
 
 ;; UTILS FOR CODEGEN
 

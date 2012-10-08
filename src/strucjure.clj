@@ -1,7 +1,8 @@
 (ns strucjure
   (:use clojure.test
         [slingshot.slingshot :only [throw+ try+]])
-  (:require clojure.set
+  (:require strucjure.bootstrap
+            clojure.set
             clojure.walk))
 
 ;; PEG parser / pattern matcher
@@ -267,41 +268,12 @@
 
 ;; PATTERN PARSER
 
-(defn seq-some [& patterns]
-  (->Seq
-   (concat
-    [(->Guard '(or (instance? clojure.lang.Seqable %) (nil? %))) (->Leave `(seq ~input-sym))]
-    patterns)))
-
-(defn seq-all [& patterns]
+(defn seq-ast [patterns]
   (->Seq
    (concat
     [(->Guard '(or (instance? clojure.lang.Seqable %) (nil? %))) (->Leave `(seq ~input-sym))]
     patterns
     [(->GuardNil)])))
-
-(defn head [pattern]
-  (->Head (->Seq [pattern (->GuardNil)])))
-
-(defn import [match pattern]
-  (->Import match (->Seq [pattern (->GuardNil)])))
-
-(def zero-or-more
-  (let [elem (gensym "elem__")]
-    (eval
-     `(fn [~elem]
-        (->Match
-         ~(compile
-           [(seq-some (head (import elem (->Bind 'x))) (import `(zero-or-more ~elem) (->Bind 'xs))) '(cons x xs)
-            (seq-some) nil]))))))
-
-(def one-or-more
-  (let [elem (gensym "elem__")]
-    (eval
-     `(fn [~elem]
-        (->Match
-         ~(compile
-           [(seq-some (head (import elem (->Bind 'x))) (import `(zero-or-more ~elem) (->Bind 'xs))) '(cons x xs)]))))))
 
 (defn primitive? [value]
   (or (#{nil true false} value)
@@ -324,6 +296,17 @@
   (and (symbol? value)
        (re-find #"\A(?:[a-z0-9\-]+\.)*[A-Z]\w*\Z" (name value))))
 
+(def optional-syntax
+  '[(and [(elem ?x) (& ?rest)] (leave rest)) x
+    (and [(& ?rest)] (leave rest)) nil])
+
+(def zero-or-more-syntax
+  '[(and [(elem ?x) (& ((zero-or-more elem) ?xs)) (& ?rest)] (leave rest)) (cons x xs)
+    (and [(& ?rest)] (leave rest)) nil])
+
+(def one-or-more-syntax
+  '[(and [(elem ?x) (& ((zero-or-more elem) ?xs)) (& ?rest)] (leave rest)) (cons x xs)])
+
 (def pattern-syntax
   '[;; BINDINGS
     '_ (->Bind '_)
@@ -334,7 +317,7 @@
     (and (guard (class-name? %)) ?class) (->And [(->Guard `(instance? ~class ~input-sym)) (->Bind '_)])
 
     ;; SEQUENCES
-    (and (guard (vector? %)) [(& ((zero-or-more seq-pattern) ?seq-patterns))]) (apply seq-all seq-patterns)
+    (and (guard (vector? %)) [(& ((zero-or-more seq-pattern) ?seq-patterns))]) (seq-ast seq-patterns)
 
     ;; SPECIAL FORMS
     (and (guard (seq? %)) ['quote ?quoted]) (->Literal `(quote ~quoted))
@@ -359,15 +342,14 @@
     ;; ALL OTHER PATTERNS
     (pattern ?pattern) (->Head (->Seq [pattern (->GuardNil)]))])
 
-;; bootstrapped as (parse pattern-syntax)
-(def pattern-ast '[#strucjure.Literal{:literal (quote _)} (->Bind (quote _)) #strucjure.And{:patterns (#strucjure.Guard{:form (binding? %)} #strucjure.Bind{:symbol binding})} (->Bind (binding-name binding)) #strucjure.And{:patterns (#strucjure.Guard{:form (primitive? %)} #strucjure.Bind{:symbol literal})} (->Literal literal) #strucjure.And{:patterns (#strucjure.Guard{:form (class-name? %)} #strucjure.Bind{:symbol class})} (->And [(->Guard (clojure.core/seq (clojure.core/concat (clojure.core/list (quote clojure.core/instance?)) (clojure.core/list class) (clojure.core/list input-sym)))) (->Bind (quote _))]) #strucjure.And{:patterns (#strucjure.Guard{:form (vector? %)} #strucjure.Seq{:patterns (#strucjure.Guard{:form (or (instance? clojure.lang.Seqable %) (nil? %))} #strucjure.Leave{:form (clojure.core/seq %)} #strucjure.Import{:match (zero-or-more seq-pattern), :pattern #strucjure.Seq{:patterns [#strucjure.Bind{:symbol seq-patterns} #strucjure.GuardNil{}]}} #strucjure.GuardNil{})})} (apply seq-all seq-patterns) #strucjure.And{:patterns (#strucjure.Guard{:form (seq? %)} #strucjure.Seq{:patterns (#strucjure.Guard{:form (or (instance? clojure.lang.Seqable %) (nil? %))} #strucjure.Leave{:form (clojure.core/seq %)} #strucjure.Head{:pattern #strucjure.Seq{:patterns [#strucjure.Literal{:literal (quote quote)} #strucjure.GuardNil{}]}} #strucjure.Head{:pattern #strucjure.Seq{:patterns [#strucjure.Bind{:symbol quoted} #strucjure.GuardNil{}]}} #strucjure.GuardNil{})})} (->Literal (clojure.core/seq (clojure.core/concat (clojure.core/list (quote quote)) (clojure.core/list quoted)))) #strucjure.And{:patterns (#strucjure.Guard{:form (seq? %)} #strucjure.Seq{:patterns (#strucjure.Guard{:form (or (instance? clojure.lang.Seqable %) (nil? %))} #strucjure.Leave{:form (clojure.core/seq %)} #strucjure.Head{:pattern #strucjure.Seq{:patterns [#strucjure.Literal{:literal (quote guard)} #strucjure.GuardNil{}]}} #strucjure.Head{:pattern #strucjure.Seq{:patterns [#strucjure.Bind{:symbol form} #strucjure.GuardNil{}]}} #strucjure.GuardNil{})})} (->Guard form) #strucjure.And{:patterns (#strucjure.Guard{:form (seq? %)} #strucjure.Seq{:patterns (#strucjure.Guard{:form (or (instance? clojure.lang.Seqable %) (nil? %))} #strucjure.Leave{:form (clojure.core/seq %)} #strucjure.Head{:pattern #strucjure.Seq{:patterns [#strucjure.Literal{:literal (quote leave)} #strucjure.GuardNil{}]}} #strucjure.Head{:pattern #strucjure.Seq{:patterns [#strucjure.Bind{:symbol form} #strucjure.GuardNil{}]}} #strucjure.GuardNil{})})} (->Leave form) #strucjure.And{:patterns (#strucjure.Guard{:form (seq? %)} #strucjure.Seq{:patterns (#strucjure.Guard{:form (or (instance? clojure.lang.Seqable %) (nil? %))} #strucjure.Leave{:form (clojure.core/seq %)} #strucjure.Head{:pattern #strucjure.Seq{:patterns [#strucjure.Literal{:literal (quote and)} #strucjure.GuardNil{}]}} #strucjure.Import{:match (one-or-more pattern), :pattern #strucjure.Seq{:patterns [#strucjure.Bind{:symbol patterns} #strucjure.GuardNil{}]}} #strucjure.GuardNil{})})} (->And patterns) #strucjure.And{:patterns (#strucjure.Guard{:form (seq? %)} #strucjure.Seq{:patterns (#strucjure.Guard{:form (or (instance? clojure.lang.Seqable %) (nil? %))} #strucjure.Leave{:form (clojure.core/seq %)} #strucjure.Head{:pattern #strucjure.Seq{:patterns [#strucjure.Literal{:literal (quote or)} #strucjure.GuardNil{}]}} #strucjure.Import{:match (one-or-more pattern), :pattern #strucjure.Seq{:patterns [#strucjure.Bind{:symbol patterns} #strucjure.GuardNil{}]}} #strucjure.GuardNil{})})} (->Or patterns) #strucjure.And{:patterns (#strucjure.Guard{:form (symbol? %)} #strucjure.Bind{:symbol variable})} (->Literal variable) #strucjure.And{:patterns (#strucjure.Guard{:form (seq? %)} #strucjure.Seq{:patterns (#strucjure.Guard{:form (or (instance? clojure.lang.Seqable %) (nil? %))} #strucjure.Leave{:form (clojure.core/seq %)} #strucjure.Head{:pattern #strucjure.Seq{:patterns [#strucjure.Bind{:symbol match} #strucjure.GuardNil{}]}} #strucjure.Head{:pattern #strucjure.Seq{:patterns [#strucjure.Import{:match pattern, :pattern #strucjure.Seq{:patterns [#strucjure.Bind{:symbol pattern} #strucjure.GuardNil{}]}} #strucjure.GuardNil{}]}} #strucjure.GuardNil{})})} (->Import match (->Seq [pattern (->GuardNil)]))])
-
-;; bootstrapped as (parse seq-pattern-syntax)
-(def seq-pattern-ast '[#strucjure.And{:patterns (#strucjure.Guard{:form (seq? %)} #strucjure.Seq{:patterns (#strucjure.Guard{:form (or (instance? clojure.lang.Seqable %) (nil? %))} #strucjure.Leave{:form (clojure.core/seq %)} #strucjure.Head{:pattern #strucjure.Seq{:patterns [#strucjure.Literal{:literal (quote &)} #strucjure.GuardNil{}]}} #strucjure.Head{:pattern #strucjure.Seq{:patterns [#strucjure.Import{:match pattern, :pattern #strucjure.Seq{:patterns [#strucjure.Bind{:symbol pattern} #strucjure.GuardNil{}]}} #strucjure.GuardNil{}]}} #strucjure.GuardNil{})})} pattern #strucjure.And{:patterns (#strucjure.Guard{:form (seq? %)} #strucjure.Seq{:patterns (#strucjure.Guard{:form (or (instance? clojure.lang.Seqable %) (nil? %))} #strucjure.Leave{:form (clojure.core/seq %)} #strucjure.Head{:pattern #strucjure.Seq{:patterns [#strucjure.Literal{:literal (quote guard)} #strucjure.GuardNil{}]}} #strucjure.Head{:pattern #strucjure.Seq{:patterns [#strucjure.Bind{:symbol form} #strucjure.GuardNil{}]}} #strucjure.GuardNil{})})} (->Guard form) #strucjure.Import{:match pattern, :pattern #strucjure.Seq{:patterns [#strucjure.Bind{:symbol pattern} #strucjure.GuardNil{}]}} (->Head (->Seq [pattern (->GuardNil)]))])
+;; BOOTSTRAPPING
 
 (declare seq-pattern)
-(def pattern (->Match (eval (compile pattern-ast))))
-(def seq-pattern (->Match (eval (compile seq-pattern-ast))))
+(def optional (eval `(fn [~'elem] (->Match ~(compile (read-string strucjure.bootstrap/optional-ast))))))
+(def zero-or-more (eval `(fn [~'elem] (->Match ~(compile (read-string strucjure.bootstrap/zero-or-more-ast))))))
+(def one-or-more (eval `(fn [~'elem] (->Match ~(compile (read-string strucjure.bootstrap/one-or-more-ast))))))
+(def pattern (eval `(->Match ~(compile (read-string strucjure.bootstrap/pattern-ast)))))
+(def seq-pattern (eval `(->Match ~(compile (read-string strucjure.bootstrap/seq-pattern-ast)))))
 
 (defn parse [patterns&values]
   (assert (even? (count patterns&values)))
@@ -392,8 +374,11 @@
 ;; tests
 
 (deftest self-describing
-  (= pattern-ast (vec (parse pattern-syntax)))
-  (= seq-pattern-ast (vec (parse seq-pattern-syntax))))
+  (is (= (read-string strucjure.bootstrap/optional-ast) (vec (parse optional-syntax))))
+  (is (= (read-string strucjure.bootstrap/zero-or-more-ast) (vec (parse zero-or-more-syntax))))
+  (is (= (read-string strucjure.bootstrap/one-or-more-ast) (vec (parse one-or-more-syntax))))
+  (is (= (read-string strucjure.bootstrap/pattern-ast) (vec (parse pattern-syntax))))
+  (is (= (read-string strucjure.bootstrap/seq-pattern-ast) (vec (parse seq-pattern-syntax)))))
 
 ;; TODO: construct random asts and test that they never throw an error
 ;; TODO: test that side effects are never repeated

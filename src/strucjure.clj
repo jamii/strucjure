@@ -270,13 +270,13 @@
 (defn seq-some [& patterns]
   (->Seq
    (concat
-    [(->Guard '(or (sequential? %) (nil? %))) (->Leave `(seq ~input-sym))]
+    [(->Guard '(or (instance? clojure.lang.Seqable %) (nil? %))) (->Leave `(seq ~input-sym))]
     patterns)))
 
 (defn seq-all [& patterns]
   (->Seq
    (concat
-    [(->Guard '(or (sequential? %) (nil? %))) (->Leave `(seq ~input-sym))]
+    [(->Guard '(or (instance? clojure.lang.Seqable %) (nil? %))) (->Leave `(seq ~input-sym))]
     patterns
     [(->GuardNil)])))
 

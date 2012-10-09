@@ -19,6 +19,7 @@
 ;; try to reduce allocation of false-thunks
 ;; replace true-thunk with (if-let [[...] (or ...)] ...)
 ;; think about extensibility and memoization
+;; re-add Or patterns
 
 ;; pile of thunks codegen method
 ;; defnmatch can add args to bindings so not expensive
@@ -27,67 +28,82 @@
 
 (def input-sym '%)
 
+(defn replace-input-sym [input form]
+  (clojure.walk/prewalk-replace {input-sym input} form))
+
 ;; Used to avoid exponential expansion of code in repeated branches
-(defrecord Thunk [name])
+;; :name is a symbol which refers to the thunk fn
+;; :args is a vector of symbols which must be passed to the thunk fn
+(defrecord Thunk [name args])
 
-(defn unthunk [form]
-  (if (= Thunk (class form))
-    (:name form)
-    form))
-
-;; clojure.walk/prewalk-replace fails if it hits a thunk :(
-(defn replace-thunk [thunk body]
+(defn expand-thunks [body]
   (if (= Thunk (class body))
-    (if (= thunk body)
-      `(~(:name thunk))
-      body)
-    (clojure.walk/walk (partial replace-thunk thunk) identity body)))
+    `(~(:name body) ~@(:args body))
+    (clojure.walk/walk expand-thunks identity body)))
+
+(defn filter-nil [args]
+  (vec (filter #(not (= nil %)) args)))
+
+(defn filter-used [args form]
+  (vec (filter
+        (fn [arg]
+          (let [found (atom false)]
+            (clojure.walk/postwalk
+             (fn [inner-form]
+               (when (= arg inner-form) (swap! found (fn [_] true))))
+             form)
+            @found))
+        args)))
 
 ;; thunkify is safe so long as we never reuse variable names
-(defn thunkify* [form body-fn]
-  (if (= Thunk (class form))
-     ;; already a thunk, just reuse and a higher up thunkify will deal with it
-     (body-fn form)
-     ;; otherwise, insert a new thunk
-     (let [name (gensym "thunk__")
-           thunk (->Thunk name)
-           body (replace-thunk thunk (body-fn thunk))]
-       `(let [~name (fn [] ~form)]
-          ~body))))
+;; TODO check if matching thunk already exists (to optimise Or)
+(defn thunkify [thunks form args]
+  (let [args (filter-nil args)]
+    (if (and (= Thunk (class form))
+             (clojure.set/subset? (set (filter-nil (:args form))) (set args)))
+      ;; already a thunk with a subset of these args, just reuse it
+      form
+      ;; otherwise, create a new thunk
+      (let [args (filter-used args (expand-thunks form))
+            name (gensym "thunk__")
+            thunk (->Thunk name args)
+            thunk-fn `(~name ~args ~form)]
+        (swap! thunks conj thunk-fn)
+        thunk))))
 
-(defmacro thunkify [sym body]
-  `(thunkify* ~sym (fn [~sym] ~body)))
-
-;; PATTERN AST
+;; LOW-LEVEL AST
 
 (defprotocol Ast
   "An Abstract Syntax Tree for a pattern."
-  (ast->clj* [this input bindings true-case false-case]
-    "Output code which tests the pattern against input with the supplied bindings. If the pattern succeeds, call true case with the remaining input and the new bindings (true-case is (fn [rest bindings] code)). Otherwise call the false-case (false-case is code referencing a thunk)."))
+  (ast->clj* [this input bindings thunks true-case false-case]
+    "Output code which tests the pattern against input with the supplied bindings. May add new thunks to the list. If the pattern succeeds, call true case with the remaining input and the new bindings (true-case is (fn [rest bindings] code)). Otherwise call the false-case (false-case is code)."))
 
-(defn ast->clj [ast input bindings true-case false-case]
-  (ast->clj* ast input bindings true-case false-case))
+(defn ast->clj [ast input bindings thunks true-case false-case]
+  (ast->clj* ast input bindings thunks true-case false-case))
 
 ;; Always succeeds. Consumes and transforms input
 (defrecord Leave [form]
   Ast
-  (ast->clj* [this input bindings true-case false-case]
-    (let [left (gensym "left__")]
-      `(let [~left (let [~input-sym ~input] ~form)]
-         ~(true-case left bindings)))))
+  (ast->clj* [this input bindings thunks true-case false-case]
+    (let [form (replace-input-sym input form)]
+      (if (or (symbol? form) (nil? form))
+        (true-case form bindings)
+        (let [left (gensym "left__")]
+          `(let [~left ~form]
+             ~(true-case left (conj bindings left))))))))
 
 ;; Succeeds if form evaluates to true. Does not consume anything
 (defrecord Guard [form]
   Ast
-  (ast->clj* [this input bindings true-case false-case]
-    `(if (let [~input-sym ~input] ~form)
+  (ast->clj* [this input bindings thunks true-case false-case]
+    `(if ~(replace-input-sym input form)
        ~(true-case input bindings)
        ~false-case)))
 
 ;; Same as (->Guard '(= nil %)) but can sometimes be compiled away
 (defrecord GuardNil []
   Ast
-  (ast->clj* [this input bindings true-case false-case]
+  (ast->clj* [this input bindings thunks true-case false-case]
     (if (= nil input)
       ;; hardcoded to nil, will always succeed
       (true-case nil bindings)
@@ -101,129 +117,93 @@
 ;; Always consumes all input
 (defrecord Bind [symbol]
   Ast
-  (ast->clj* [this input bindings true-case false-case]
-    (cond
-      ;; ignore binding
-      (= '_ symbol) (true-case nil bindings)
+  (ast->clj* [this input bindings thunks true-case false-case]
+    (if (contains? bindings symbol)
       ;; test for equality
-      (contains? bindings symbol) `(if (= ~symbol ~input)
-                                     ~(true-case nil bindings)
-                                     ~false-case)
+      `(if (= ~symbol ~input)
+         ~(true-case nil bindings)
+         ~false-case)
       ;; bind symbol
-      :else `(let [~symbol ~input]
-               ~(true-case nil (conj bindings symbol))))))
+      `(let [~symbol ~input]
+         ~(true-case nil (conj bindings symbol))))))
 
 ;; Calls the match with the current import and runs pattern on its output
 ;; The pattern must consume the whole output
 (defrecord Import [match pattern]
   Ast
-  (ast->clj* [this input bindings true-case false-case]
-    (thunkify false-case
-              (let [output (gensym "output__")
-                    rest (gensym "rest__")]
-                `((.match-fn ~match)
-                  ~input
-                  (fn [~output ~rest]
-                    ~(ast->clj pattern output bindings
-                               (fn [new-rest new-bindings]
-                                 (assert (= nil new-rest)) ;; pattern must totally consume import
-                                 (true-case rest new-bindings))
-                               false-case))
-                  ~(unthunk false-case))))))
-
-;; TODO the lack of symmetry between And and Or bothers me
-;; Suspect it indicates something is incorrect
-
-;; Common logic for And and Seq - the only difference is how the input is threaded through
-(defn sequential-ast [input-choice patterns input bindings true-case false-case]
-  (thunkify false-case
-              (letfn [(patterns->clj [patterns rest bindings]
-                        (if-let [[pattern & patterns] patterns]
-                          (ast->clj pattern (input-choice input rest) bindings
-                                    (fn [new-rest new-bindings]
-                                      (patterns->clj patterns new-rest new-bindings))
-                                    false-case)
-                          (true-case rest bindings)))]
-                (patterns->clj patterns input bindings))))
+  (ast->clj* [this input bindings thunks true-case false-case]
+    (let [false-case (thunkify thunks false-case (conj bindings input))
+          output (gensym "output__")
+          rest (gensym "rest__")]
+      `((.match-fn ~match)
+        ~input
+        (fn [~output ~rest]
+          ~(ast->clj pattern output bindings thunks
+                     (fn [new-rest new-bindings]
+                       (assert (= nil new-rest)) ;; pattern must totally consume import
+                       (true-case rest (conj new-bindings rest)))
+                     false-case))
+        (fn [] ~false-case)))))
 
 ;; All patterns get the same input
 ;; All bindings are exported
 ;; The output is the output from the last pattern
-(defrecord And [patterns]
+(defrecord And [pattern-a pattern-b]
   Ast
-  (ast->clj* [this input bindings true-case false-case]
-    (sequential-ast (fn [input _] input) patterns input bindings true-case false-case)))
+  (ast->clj* [this input bindings thunks true-case false-case]
+    (let [false-case (thunkify thunks false-case bindings)]
+      (ast->clj pattern-a input bindings thunks
+                (fn [rest new-bindings]
+                  (ast->clj pattern-b input new-bindings thunks true-case false-case))
+                false-case))))
 
 ;; Each pattern gets the remaining input from the last pattern
 ;; All bindings are exported
 ;; The output is the output from the last pattern
-(defrecord Seq [patterns]
+(defrecord Seq [pattern-a pattern-b]
   Ast
-  (ast->clj* [this input bindings true-case false-case]
-    (sequential-ast (fn [_ rest] rest) patterns input bindings true-case false-case)))
+  (ast->clj* [this input bindings thunks true-case false-case]
+    (let [false-case (thunkify thunks false-case bindings)]
+      (ast->clj pattern-a input bindings thunks
+                (fn [rest new-bindings]
+                  (ast->clj pattern-b rest (conj new-bindings rest) thunks true-case false-case))
+                false-case))))
 
-;; This is an ugly hack
-;; Breaks if any branch does not call true-case exactly once
-(defn or-bindings [patterns old-bindings]
-  (let [branch-bindings (atom #{})]
-      (doseq [pattern patterns]
-        (ast->clj pattern :input old-bindings
-                  (fn [_ new-bindings]
-                    (swap! branch-bindings conj new-bindings))
-                  ::false-case))
-      (assert (apply = @branch-bindings))
-      (if-let [[new-bindings & _] (seq @branch-bindings)]
-        (clojure.set/difference new-bindings old-bindings)
-        #{})))
+;; HIGH-LEVEL AST
 
-;; All patterns get the same input
-;; The bindings from each branch are exported and must be the same across all branches
-;; The output is the output of the first successful pattern
-(defrecord Or [patterns]
-  Ast
-  (ast->clj* [this input bindings true-case false-case]
-    (let [or-bindings (or-bindings patterns bindings)
-          all-bindings (clojure.set/union bindings or-bindings)
-          true-case-input (gensym "true-case-input__")
-          true-case-thunk (gensym "true-case-thunk__")
-          true-case-call (fn [branch-rest _]
-                           `(~true-case-thunk ~branch-rest ~@or-bindings))]
-      (letfn [(patterns->clj [patterns]
-                (if-let [[pattern & patterns] patterns]
-                  (ast->clj pattern input bindings
-                            true-case-call
-                            (patterns->clj patterns))
-                  false-case))]
-        `(let [~true-case-thunk (fn [~true-case-input ~@or-bindings]
-                                  ~(true-case true-case-input all-bindings))]
-           ~(patterns->clj patterns))))))
+(defn and-ast [& patterns]
+  (reduce ->And patterns))
 
-;; Runs pattern against the head of the input sequence
-;; Outputs the rest of the input sequence
-;; Fails if the pattern returns output
-;; Does NOT check if input is seqable, will crash if used with non-seqable input
-(defrecord Head [pattern]
-  Ast
-  (ast->clj* [this input bindings true-case false-case]
-    (thunkify false-case
-              (let [head (gensym "head__")
-                    tail (gensym "tail__")]
-                `(if-let [[~head & ~tail] ~input]
-                   ~(ast->clj pattern head bindings
-                              (fn [rest new-bindings]
-                                (assert (= nil rest)) ;; pattern must completely consume head
-                                (true-case tail new-bindings))
-                              false-case)
-                   ~false-case)))))
+(defn seq-ast [& patterns]
+  (reduce ->Seq patterns))
 
-(defrecord Literal [literal]
-  Ast
-  (ast->clj* [this input bindings true-case false-case]
-    `(if (= ~input ~literal)
-      ~(true-case nil bindings)
-      ~false-case)))
+(defn import-ast [match pattern]
+  (->Import match (seq-ast pattern (->GuardNil))))
 
-;; COMPILER API
+(defn literal-ast [literal]
+  (seq-ast (->Guard `(= ~literal ~input-sym))
+           (->Leave nil)))
+
+(defn head-ast [pattern]
+  (seq-ast (->Guard `(not= nil ~input-sym))
+           (and-ast (seq-ast (->Leave `(first ~input-sym))
+                             pattern
+                             (->GuardNil))
+                    (->Leave `(next ~input-sym)))))
+
+(defn class-ast [class-name]
+  (seq-ast (->Guard `(instance ~class-name ~input-sym))
+           (->Leave nil)))
+
+(defn seqable-ast [& patterns]
+  (apply seq-ast
+   (flatten
+    [(->Guard '(or (instance? clojure.lang.Seqable %) (nil? %)))
+     (->Leave `(seq ~input-sym))
+     patterns
+     (->GuardNil)])))
+
+;; MATCHES
 
 (defn succeed [output rest]
   (if (= nil rest)
@@ -242,38 +222,7 @@
   (invoke [this value true-cont false-cont]
     (match-fn value true-cont false-cont)))
 
-;; Here true-case is (fn [output rest] code), false-case is code
-(defn compile-inline [patterns&values input true-case false-case]
-  (assert (even? (count patterns&values)))
-  (let [output (gensym "output__")]
-    (reduce
-     (fn [false-branch [pattern value]]
-       (ast->clj pattern input #{}
-                 (fn [rest bindings]
-                   `(let [~output (let [~input-sym ~rest] ~value)]
-                      ~(true-case output rest)))
-                 false-branch))
-     false-case
-     (reverse (partition 2 patterns&values)))))
-
-(defn compile [patterns&values]
-  (let [input (gensym "input__")
-        true-cont (gensym "true-cont__")
-        false-cont (gensym "false-cont__")
-        true-case (fn [output rest] `(~true-cont ~output ~rest))
-        false-thunk (->Thunk false-cont)]
-    `(fn [~input ~true-cont ~false-cont]
-       ~(replace-thunk false-thunk
-                       (compile-inline patterns&values input true-case false-thunk)))))
-
-;; PATTERN PARSER
-
-(defn seq-ast [patterns]
-  (->Seq
-   (concat
-    [(->Guard '(or (instance? clojure.lang.Seqable %) (nil? %))) (->Leave `(seq ~input-sym))]
-    patterns
-    [(->GuardNil)])))
+;; BOOTSTRAPPED PARSER
 
 (defn primitive? [value]
   (or (#{nil true false} value)
@@ -296,98 +245,114 @@
   (and (symbol? value)
        (re-find #"\A(?:[a-z0-9\-]+\.)*[A-Z]\w*\Z" (name value))))
 
-(def optional-syntax
-  '[(and [(elem ?x) (& ?rest)] (leave rest)) x
-    (and [(& ?rest)] (leave rest)) nil])
-
-(def zero-or-more-syntax
-  '[(and [(elem ?x) (& ((zero-or-more elem) ?xs)) (& ?rest)] (leave rest)) (cons x xs)
-    (and [(& ?rest)] (leave rest)) nil])
-
-(def one-or-more-syntax
-  '[(and [(elem ?x) (& ((zero-or-more elem) ?xs)) (& ?rest)] (leave rest)) (cons x xs)])
-
-(def pattern-syntax
-  '[;; BINDINGS
-    '_ (->Bind '_)
-    (and (guard (binding? %)) ?binding) (->Bind (binding-name binding))
-
-    ;; LITERALS
-    (and (guard (primitive? %)) ?literal) (->Literal literal) ; primitives evaluate to themselves, so don't need quoting
-    (and (guard (class-name? %)) ?class) (->And [(->Guard `(instance? ~class ~input-sym)) (->Bind '_)])
-
-    ;; SEQUENCES
-    (and (guard (vector? %)) [(& ((zero-or-more seq-pattern) ?seq-patterns))]) (seq-ast seq-patterns)
-
-    ;; SPECIAL FORMS
-    (and (guard (seq? %)) ['quote ?quoted]) (->Literal `(quote ~quoted))
-    (and (guard (seq? %)) ['guard ?form]) (->Guard form)
-    (and (guard (seq? %)) ['leave ?form]) (->Leave form)
-    (and (guard (seq? %)) ['and (& ((one-or-more pattern) ?patterns))]) (->And patterns)
-    (and (guard (seq? %)) ['or (& ((one-or-more pattern) ?patterns))]) (->Or patterns)
-
-    ;; EXTERNAL VARIABLES
-    (and (guard (symbol? %)) ?variable) (->Literal variable)
-
-    ;; IMPORTED MATCHES
-    (and (guard (seq? %)) [?match (pattern ?pattern)]) (->Import match (->Seq [pattern (->GuardNil)]))])
-
-(def seq-pattern-syntax
-  '[;; & PATTERNS
-    (and (guard (seq? %)) ['& (pattern ?pattern)]) pattern
-
-    ;; ESCAPED PATTERNS
-    (and (guard (seq? %)) ['guard ?form]) (->Guard form)
-
-    ;; ALL OTHER PATTERNS
-    (pattern ?pattern) (->Head (->Seq [pattern (->GuardNil)]))])
-
-;; BOOTSTRAPPING
-
-(declare seq-pattern)
 (def optional (eval strucjure.bootstrap/optional))
 (def zero-or-more (eval strucjure.bootstrap/zero-or-more))
 (def one-or-more (eval strucjure.bootstrap/one-or-more))
+(declare seq-pattern)
 (def pattern (eval strucjure.bootstrap/pattern))
 (def seq-pattern (eval strucjure.bootstrap/seq-pattern))
 
 (defn parse [patterns&values]
   (assert (even? (count patterns&values)))
   (apply concat
-         (for [[pattern-syntax value] (partition 2 patterns&values)]
-           [(pattern pattern-syntax) value])))
+         (for [[pattern-code value] (partition 2 patterns&values)]
+           [(pattern pattern-code) value])))
 
-(deftest self-describing
-  (is (= strucjure.bootstrap/optional `(fn [~'elem] (->Match ~(compile (parse optional-syntax))))))
-  (is (= strucjure.bootstrap/zero-or-more `(fn [~'elem] (->Match ~(compile (parse zero-or-more-syntax))))))
-  (is (= strucjure.bootstrap/one-or-more `(fn [~'elem] (->Match ~(compile (parse one-or-more-syntax))))))
-  (is (= strucjure.bootstrap/pattern `(->Match ~(compile (parse pattern-syntax)))))
-  (is (= strucjure.bootstrap/seq-pattern `(->Match ~(compile (parse seq-pattern-syntax))))))
+;; COMPILER API
 
-;; This is used to produce strucjure.bootstrap
-(defn bootstrap []
-  `(do
-     (def ~'optional '(fn [~'elem] (->Match ~(compile (parse optional-syntax)))))
-     (def ~'zero-or-more '(fn [~'elem] (->Match ~(compile (parse zero-or-more-syntax)))))
-     (def ~'one-or-more '(fn [~'elem] (->Match ~(compile (parse one-or-more-syntax)))))
-     (def ~'pattern '(->Match ~(compile (parse pattern-syntax))))
-     (def ~'seq-pattern '(->Match ~(compile (parse seq-pattern-syntax))))))
+;; Here true-case is (fn [output rest] code), false-case is code
+(defn compile-inline [patterns&values input bindings true-case false-case wrapper]
+  (assert (even? (count patterns&values)))
+  (let [output (gensym "output__")
+        thunks (atom [])
+        start (reduce
+               (fn [false-branch [pattern value]]
+                 (ast->clj pattern input bindings thunks
+                           (fn [rest _]
+                             `(let [~output ~(replace-input-sym rest value)]
+                                ~(true-case output rest)))
+                           false-branch))
+               false-case
+               (reverse (partition 2 patterns&values)))]
+    (expand-thunks
+     `(letfn [~@@thunks]
+        ~(wrapper start)))))
+
+(defn compile-match [patterns&values bindings wrapper]
+  (let [input (gensym "input__")
+        true-cont (gensym "true-cont__")
+        false-cont (gensym "false-cont__")
+        bindings (conj bindings input true-cont false-cont)
+        true-case (fn [output rest] (->Thunk '.invoke [true-cont output rest]))
+        false-case (->Thunk '.invoke [false-cont])
+        wrapper (fn [start] (wrapper `(->Match (fn [~input ~true-cont ~false-cont] ~start))))]
+    (compile-inline patterns&values input bindings true-case false-case wrapper)))
 
 ;; USER API
 
 (defmacro match [& patterns&values]
-  `(->Match ~(compile (parse patterns&values))))
+  `~(compile-match (parse patterns&values) [] identity))
 
 (defmacro defmatch [name & patterns&values]
   `(def ~name
-     (match ~@patterns&values)))
+     ~(compile-match (parse patterns&values) [] identity)))
 
 (defmacro defnmatch [name args & patterns&values]
   `(def ~name
-     (fn [~@args]
-       (match ~@patterns&values))))
+     ~(compile-match (parse patterns&values) args (fn [start] `(fn [~@args] ~start)))))
 
-;; tests
+;; BOOTSTRAPPING
+
+(defn bootstrap []
+  (clojure.walk/walk macroexpand-1 identity
+   (list
+      '(defnmatch optional [elem]
+         (and [(elem ?x) (& ?rest)] (leave rest)) x
+         (and [(& ?rest)] (leave rest)) nil)
+
+      '(defnmatch zero-or-more [elem]
+         (and [(elem ?x) (& ((zero-or-more elem) ?xs)) (& ?rest)] (leave rest)) (cons x xs)
+         (and [(& ?rest)] (leave rest)) nil)
+
+      '(defnmatch one-or-more [elem]
+         (and [(elem ?x) (& ((zero-or-more elem) ?xs)) (& ?rest)] (leave rest)) (cons x xs))
+
+      '(defmatch pattern
+         ;; BINDINGS
+         '_ (->Leave nil)
+         (and (guard (binding? %)) ?binding) (->Bind (binding-name binding))
+
+         ;; LITERALS
+         (and (guard (primitive? %)) ?literal) (literal-ast literal) ; primitives evaluate to themselves, so don't need quoting
+         (and (guard (class-name? %)) ?class-name) (class-ast class-name)
+
+         ;; SEQUENCES
+         (and (guard (vector? %)) [(& ((zero-or-more seq-pattern) ?seq-patterns))]) (seqable-ast seq-patterns)
+
+         ;; SPECIAL FORMS
+         (and (guard (seq? %)) ['quote ?quoted]) (literal-ast `(quote ~quoted))
+         (and (guard (seq? %)) ['guard ?form]) (->Guard form)
+         (and (guard (seq? %)) ['leave ?form]) (->Leave form)
+         (and (guard (seq? %)) ['and (& ((one-or-more pattern) ?patterns))]) (apply and-ast patterns)
+         (and (guard (seq? %)) ['seq (& ((one-or-more pattern) ?patterns))]) (apply seq-ast patterns)
+
+         ;; EXTERNAL VARIABLES
+         (and (guard (symbol? %)) ?variable) (literal-ast variable)
+
+         ;; IMPORTED MATCHES
+         (and (guard (seq? %)) [?match (pattern ?pattern)]) (import-ast match pattern))
+
+      '(defmatch seq-pattern
+         ;; & PATTERNS
+         (and (guard (seq? %)) ['& (pattern ?pattern)]) pattern
+
+         ;; ESCAPED PATTERNS
+         (and (guard (seq? %)) ['guard ?form]) (->Guard form)
+
+         ;; ALL OTHER PATTERNS
+         (pattern ?pattern) (head-ast pattern)))))
+
+;; TESTS
 
 ;; TODO: construct random asts and test that they never throw an error
 ;; TODO: test that side effects are never repeated

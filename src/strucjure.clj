@@ -345,17 +345,33 @@
 ;; BOOTSTRAPPING
 
 (declare seq-pattern)
-(def optional (eval `(fn [~'elem] (->Match ~(compile (read-string strucjure.bootstrap/optional-ast))))))
-(def zero-or-more (eval `(fn [~'elem] (->Match ~(compile (read-string strucjure.bootstrap/zero-or-more-ast))))))
-(def one-or-more (eval `(fn [~'elem] (->Match ~(compile (read-string strucjure.bootstrap/one-or-more-ast))))))
-(def pattern (eval `(->Match ~(compile (read-string strucjure.bootstrap/pattern-ast)))))
-(def seq-pattern (eval `(->Match ~(compile (read-string strucjure.bootstrap/seq-pattern-ast)))))
+(def optional (eval strucjure.bootstrap/optional))
+(def zero-or-more (eval strucjure.bootstrap/zero-or-more))
+(def one-or-more (eval strucjure.bootstrap/one-or-more))
+(def pattern (eval strucjure.bootstrap/pattern))
+(def seq-pattern (eval strucjure.bootstrap/seq-pattern))
 
 (defn parse [patterns&values]
   (assert (even? (count patterns&values)))
   (apply concat
          (for [[pattern-syntax value] (partition 2 patterns&values)]
            [(pattern pattern-syntax) value])))
+
+(deftest self-describing
+  (is (= strucjure.bootstrap/optional `(fn [~'elem] (->Match ~(compile (parse optional-syntax))))))
+  (is (= strucjure.bootstrap/zero-or-more `(fn [~'elem] (->Match ~(compile (parse zero-or-more-syntax))))))
+  (is (= strucjure.bootstrap/one-or-more `(fn [~'elem] (->Match ~(compile (parse one-or-more-syntax))))))
+  (is (= strucjure.bootstrap/pattern `(->Match ~(compile (parse pattern-syntax)))))
+  (is (= strucjure.bootstrap/seq-pattern `(->Match ~(compile (parse seq-pattern-syntax))))))
+
+;; This is used to produce strucjure.bootstrap
+(defn bootstrap []
+  `(do
+     (def ~'optional '(fn [~'elem] (->Match ~(compile (parse optional-syntax)))))
+     (def ~'zero-or-more '(fn [~'elem] (->Match ~(compile (parse zero-or-more-syntax)))))
+     (def ~'one-or-more '(fn [~'elem] (->Match ~(compile (parse one-or-more-syntax)))))
+     (def ~'pattern '(->Match ~(compile (parse pattern-syntax))))
+     (def ~'seq-pattern '(->Match ~(compile (parse seq-pattern-syntax))))))
 
 ;; USER API
 
@@ -372,13 +388,6 @@
        (match ~@patterns&values))))
 
 ;; tests
-
-(deftest self-describing
-  (is (= (read-string strucjure.bootstrap/optional-ast) (vec (parse optional-syntax))))
-  (is (= (read-string strucjure.bootstrap/zero-or-more-ast) (vec (parse zero-or-more-syntax))))
-  (is (= (read-string strucjure.bootstrap/one-or-more-ast) (vec (parse one-or-more-syntax))))
-  (is (= (read-string strucjure.bootstrap/pattern-ast) (vec (parse pattern-syntax))))
-  (is (= (read-string strucjure.bootstrap/seq-pattern-ast) (vec (parse seq-pattern-syntax)))))
 
 ;; TODO: construct random asts and test that they never throw an error
 ;; TODO: test that side effects are never repeated

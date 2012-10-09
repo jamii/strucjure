@@ -16,13 +16,7 @@
 ;; fix match indentation in emacs
 ;; better error/failure reporting
 ;; provide syntax for matching dicts, records, regexes
-;; try to reduce allocation of false-thunks
-;; replace true-thunk with (if-let [[...] (or ...)] ...)
 ;; think about extensibility and memoization
-;; re-add Or patterns
-
-;; pile of thunks codegen method
-;; defnmatch can add args to bindings so not expensive
 
 ;; UTILS FOR CODEGEN
 
@@ -70,6 +64,9 @@
             thunk-fn `(~name ~args ~form)]
         (swap! thunks conj thunk-fn)
         thunk))))
+
+(defn replace-arg [thunk old-arg new-arg]
+  (update-in thunk [:args] #(clojure.walk/prewalk-replace {old-arg new-arg} %)))
 
 ;; LOW-LEVEL AST
 
@@ -169,6 +166,18 @@
                   (ast->clj pattern-b rest (conj new-bindings rest) thunks true-case false-case))
                 false-case))))
 
+;; Each pattern gets the same input
+;; No bindings are exported (TODO: allow exporting bindings)
+;; The output is the output from the first successful pattern
+(defrecord Or [pattern-a pattern-b]
+  Ast
+  (ast->clj* [this input bindings thunks true-case false-case]
+    (let [true-case-input (gensym "true-case-input__")
+          true-case-thunk (thunkify thunks (true-case true-case-input bindings) (conj bindings true-case-input))
+          true-case (fn [rest _] (replace-arg true-case-thunk true-case-input rest))]
+      (ast->clj pattern-a input bindings thunks true-case
+                (ast->clj pattern-b input bindings thunks true-case false-case)))))
+
 ;; HIGH-LEVEL AST
 
 (defn and-ast [& patterns]
@@ -176,6 +185,9 @@
 
 (defn seq-ast [& patterns]
   (reduce ->Seq patterns))
+
+(defn or-ast [& patterns]
+  (reduce ->Or patterns))
 
 (defn import-ast [match pattern]
   (->Import match (seq-ast pattern (->GuardNil))))
@@ -303,54 +315,58 @@
 
 ;; BOOTSTRAPPING
 
+(defmatch quote-def
+  ['def ?name ?value] `(def ~name '~value))
+
 (defn bootstrap []
-  (clojure.walk/walk macroexpand-1 identity
-   (list
-      '(defnmatch optional [elem]
-         (and [(elem ?x) (& ?rest)] (leave rest)) x
-         (and [(& ?rest)] (leave rest)) nil)
+  (map (fn [definition] (quote-def (macroexpand-1 definition)))
+       (list
+        '(defnmatch optional [elem]
+           (and [(elem ?x) (& ?rest)] (leave rest)) x
+           (and [(& ?rest)] (leave rest)) nil)
 
-      '(defnmatch zero-or-more [elem]
-         (and [(elem ?x) (& ((zero-or-more elem) ?xs)) (& ?rest)] (leave rest)) (cons x xs)
-         (and [(& ?rest)] (leave rest)) nil)
+        '(defnmatch zero-or-more [elem]
+           (and [(elem ?x) (& ((zero-or-more elem) ?xs)) (& ?rest)] (leave rest)) (cons x xs)
+           (and [(& ?rest)] (leave rest)) nil)
 
-      '(defnmatch one-or-more [elem]
-         (and [(elem ?x) (& ((zero-or-more elem) ?xs)) (& ?rest)] (leave rest)) (cons x xs))
+        '(defnmatch one-or-more [elem]
+           (and [(elem ?x) (& ((zero-or-more elem) ?xs)) (& ?rest)] (leave rest)) (cons x xs))
 
-      '(defmatch pattern
-         ;; BINDINGS
-         '_ (->Leave nil)
-         (and (guard (binding? %)) ?binding) (->Bind (binding-name binding))
+        '(defmatch pattern
+           ;; BINDINGS
+           '_ (->Leave nil)
+           (and (guard (binding? %)) ?binding) (->Bind (binding-name binding))
 
-         ;; LITERALS
-         (and (guard (primitive? %)) ?literal) (literal-ast literal) ; primitives evaluate to themselves, so don't need quoting
-         (and (guard (class-name? %)) ?class-name) (class-ast class-name)
+           ;; LITERALS
+           (and (guard (primitive? %)) ?literal) (literal-ast literal) ; primitives evaluate to themselves, so don't need quoting
+           (and (guard (class-name? %)) ?class-name) (class-ast class-name)
 
-         ;; SEQUENCES
-         (and (guard (vector? %)) [(& ((zero-or-more seq-pattern) ?seq-patterns))]) (seqable-ast seq-patterns)
+           ;; SEQUENCES
+           (and (guard (vector? %)) [(& ((zero-or-more seq-pattern) ?seq-patterns))]) (seqable-ast seq-patterns)
 
-         ;; SPECIAL FORMS
-         (and (guard (seq? %)) ['quote ?quoted]) (literal-ast `(quote ~quoted))
-         (and (guard (seq? %)) ['guard ?form]) (->Guard form)
-         (and (guard (seq? %)) ['leave ?form]) (->Leave form)
-         (and (guard (seq? %)) ['and (& ((one-or-more pattern) ?patterns))]) (apply and-ast patterns)
-         (and (guard (seq? %)) ['seq (& ((one-or-more pattern) ?patterns))]) (apply seq-ast patterns)
+           ;; SPECIAL FORMS
+           (and (guard (seq? %)) ['quote ?quoted]) (literal-ast `(quote ~quoted))
+           (and (guard (seq? %)) ['guard ?form]) (->Guard form)
+           (and (guard (seq? %)) ['leave ?form]) (->Leave form)
+           (and (guard (seq? %)) ['and (& ((one-or-more pattern) ?patterns))]) (apply and-ast patterns)
+           (and (guard (seq? %)) ['seq (& ((one-or-more pattern) ?patterns))]) (apply seq-ast patterns)
+           (and (guard (seq? %)) ['or (& ((one-or-more pattern) ?patterns))]) (apply or-ast patterns)
 
-         ;; EXTERNAL VARIABLES
-         (and (guard (symbol? %)) ?variable) (literal-ast variable)
+           ;; EXTERNAL VARIABLES
+           (and (guard (symbol? %)) ?variable) (literal-ast variable)
 
-         ;; IMPORTED MATCHES
-         (and (guard (seq? %)) [?match (pattern ?pattern)]) (import-ast match pattern))
+           ;; IMPORTED MATCHES
+           (and (guard (seq? %)) [?match (pattern ?pattern)]) (import-ast match pattern))
 
-      '(defmatch seq-pattern
-         ;; & PATTERNS
-         (and (guard (seq? %)) ['& (pattern ?pattern)]) pattern
+        '(defmatch seq-pattern
+           ;; & PATTERNS
+           (and (guard (seq? %)) ['& (pattern ?pattern)]) pattern
 
-         ;; ESCAPED PATTERNS
-         (and (guard (seq? %)) ['guard ?form]) (->Guard form)
+           ;; ESCAPED PATTERNS
+           (and (guard (seq? %)) ['guard ?form]) (->Guard form)
 
-         ;; ALL OTHER PATTERNS
-         (pattern ?pattern) (head-ast pattern)))))
+           ;; ALL OTHER PATTERNS
+           (pattern ?pattern) (head-ast pattern)))))
 
 ;; TESTS
 

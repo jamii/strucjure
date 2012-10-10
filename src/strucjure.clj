@@ -9,11 +9,11 @@
 ;; (originally based on matchure)
 
 ;; A pattern takes an input and a set of bindings, consumes some or all of the input and returns new bindings
-;; A match takes an input, consumes some or all of the input and returns a value
-;; A match is constructed from a list of [pattern value] pairs, where the value forms have access to the patterns bindings
+;; A view takes an input, consumes some or all of the input and returns a value
+;; A view is constructed from a list of [pattern value] pairs, where the value forms have access to the patterns bindings
 
 ;; TODO
-;; fix match indentation in emacs
+;; fix view indentation in emacs
 ;; better error/failure reporting
 ;; provide syntax for matching records, predicates
 ;; allow optional keys?
@@ -125,15 +125,15 @@
       `(let [~symbol ~input]
          ~(true-case nil (conj bindings symbol))))))
 
-;; Calls the match with the current import and runs pattern on its output
+;; Calls the view with the current import and runs pattern on its output
 ;; The pattern must consume the whole output
-(defrecord Import [match pattern]
+(defrecord Import [view pattern]
   Ast
   (ast->clj* [this input bindings thunks true-case false-case]
     (let [false-case (thunkify thunks false-case (conj bindings input))
           output (gensym "output__")
           rest (gensym "rest__")]
-      `((.match-fn ~match)
+      `((.view-fn ~view)
         ~input
         (fn [~output ~rest]
           ~(ast->clj pattern output bindings thunks
@@ -190,8 +190,8 @@
 (defn or-ast [& patterns]
   (reduce ->Or patterns))
 
-(defn import-ast [match pattern]
-  (->Import match (seq-ast pattern (->GuardNil))))
+(defn import-ast [view pattern]
+  (->Import view (seq-ast pattern (->GuardNil))))
 
 (defn literal-ast [literal]
   (seq-ast (->Guard `(= ~literal ~input-sym))
@@ -234,7 +234,7 @@
    (->Guard `(not= nil (re-find ~regex ~input-sym)))
    (->Leave nil)))
 
-;; MATCHES
+;; VIEWS
 
 (defn succeed [output rest]
   (if (= nil rest)
@@ -242,16 +242,16 @@
     (throw+ ::remaining-input)))
 
 (defn fail []
-  (throw+ ::match-failure))
+  (throw+ ::no-matching-pattern))
 
-(defrecord Match [match-fn]
+(defrecord View [view-fn]
   clojure.lang.IFn
   (invoke [this value]
-    (match-fn value succeed fail))
+    (view-fn value succeed fail))
   (invoke [this value true-cont]
-    (match-fn value true-cont fail))
+    (view-fn value true-cont fail))
   (invoke [this value true-cont false-cont]
-    (match-fn value true-cont false-cont)))
+    (view-fn value true-cont false-cont)))
 
 ;; BOOTSTRAPPED PARSER
 
@@ -311,53 +311,66 @@
      `(letfn [~@@thunks]
         ~(wrapper start)))))
 
-(defn compile-match [patterns&values bindings wrapper]
+(defn compile-view [patterns&values bindings wrapper]
   (let [input (gensym "input__")
         true-cont (gensym "true-cont__")
         false-cont (gensym "false-cont__")
         bindings (conj bindings input true-cont false-cont)
         true-case (fn [output rest] (->Thunk '.invoke [true-cont output rest]))
         false-case (->Thunk '.invoke [false-cont])
-        wrapper (fn [start] (wrapper `(->Match (fn [~input ~true-cont ~false-cont] ~start))))]
+        wrapper (fn [start] (wrapper `(->View (fn [~input ~true-cont ~false-cont] ~start))))]
     (compile-inline patterns&values input bindings true-case false-case wrapper)))
 
 ;; USER API
 
-(defmacro match [& patterns&values]
-  `~(compile-match (parse patterns&values) [] identity))
+(defn succeed-inline [output rest]
+  (if (= nil rest)
+    output
+    `(if (= nil ~rest)
+       ~output
+       (throw+ ::input-remaining))))
 
-(defmacro defmatch [name & patterns&values]
-  `(def ~name
-     ~(compile-match (parse patterns&values) [] identity)))
+(def fail-inline
+  `(throw+ ::no-matching-pattern))
 
-(defmacro defnmatch [name args & patterns&values]
+(defmacro match [input & patterns&values]
+  (compile-inline (parse patterns&values) input [] succeed-inline fail-inline identity))
+
+(defmacro view [& patterns&values]
+  (compile-view (parse patterns&values) [] identity))
+
+(defmacro defview [name & patterns&values]
   `(def ~name
-     ~(compile-match (parse patterns&values) args (fn [start] `(fn [~@args] ~start)))))
+     ~(compile-view (parse patterns&values) [] identity)))
+
+(defmacro defnview [name args & patterns&values]
+  `(def ~name
+     ~(compile-view (parse patterns&values) args (fn [start] `(fn [~@args] ~start)))))
 
 ;; BOOTSTRAPPING
 
-(defmatch quote-def
+(defview quote-def
   ['def ?name ?value] `(def ~name '~value))
 
 (defn bootstrap []
   (map (fn [definition] (quote-def (macroexpand-1 definition)))
        (list
 
-        '(defnmatch optional [elem]
+        '(defnview optional [elem]
            (and [(elem ?x) (& ?rest)] (leave rest)) x
            (and [(& ?rest)] (leave rest)) nil)
 
-        '(defnmatch zero-or-more [elem]
+        '(defnview zero-or-more [elem]
            (and [(elem ?x) (& ((zero-or-more elem) ?xs)) (& ?rest)] (leave rest)) (cons x xs)
            (and [(& ?rest)] (leave rest)) nil)
 
-        '(defnmatch one-or-more [elem]
+        '(defnview one-or-more [elem]
            (and [(elem ?x) (& ((zero-or-more elem) ?xs)) (& ?rest)] (leave rest)) (cons x xs))
 
-        '(defmatch key&pattern
+        '(defview key&pattern
            [?key (pattern ?pattern)] [key pattern])
 
-        '(defmatch pattern
+        '(defview pattern
            ;; BINDINGS
            '_ (->Leave nil)
            (and (guard (binding? ?)) ?binding) (->Bind (binding-name binding))
@@ -383,11 +396,11 @@
            ;; EXTERNAL VARIABLES
            (and (guard (symbol? ?)) ?variable) (literal-ast variable)
 
-           ;; IMPORTED MATCHES
+           ;; IMPORTED VIEWS
            ;; (and (guard (seq? ?)) ['? ?predicate (pattern ?pattern)]) (predicate-ast predicate pattern)
-           (and (guard (seq? ?)) [?match (pattern ?pattern)]) (import-ast match pattern))
+           (and (guard (seq? ?)) [?view (pattern ?pattern)]) (import-ast view pattern))
 
-        '(defmatch seq-pattern
+        '(defview seq-pattern
            ;; & PATTERNS
            (and (guard (seq? ?)) ['& (pattern ?pattern)]) pattern
 

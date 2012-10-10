@@ -15,7 +15,8 @@
 ;; TODO
 ;; fix match indentation in emacs
 ;; better error/failure reporting
-;; provide syntax for matching dicts, records, regexes
+;; provide syntax for matching records, regexes
+;; allow optional keys?
 ;; think about extensibility and memoization
 
 ;; UTILS FOR CODEGEN
@@ -204,7 +205,7 @@
                     (->Leave `(next ~input-sym)))))
 
 (defn class-ast [class-name]
-  (seq-ast (->Guard `(instance ~class-name ~input-sym))
+  (seq-ast (->Guard `(instance? ~class-name ~input-sym))
            (->Leave nil)))
 
 (defn seqable-ast [& patterns]
@@ -214,6 +215,19 @@
      (->Leave `(seq ~input-sym))
      patterns
      (->GuardNil)])))
+
+(defn key-ast [key pattern]
+  (seq-ast
+   (->Leave `(get ~input-sym ~key ::not-found))
+   (->Guard `(not= ::not-found ~input-sym))
+   pattern
+   (->GuardNil)))
+
+(defn map-ast [keys&patterns]
+  (apply and-ast
+         (->Guard `(instance? clojure.lang.Associative ~input-sym))
+         (for [[key pattern] keys&patterns]
+           (key-ast key pattern))))
 
 ;; MATCHES
 
@@ -260,7 +274,9 @@
 (def optional (eval strucjure.bootstrap/optional))
 (def zero-or-more (eval strucjure.bootstrap/zero-or-more))
 (def one-or-more (eval strucjure.bootstrap/one-or-more))
+(declare pattern)
 (declare seq-pattern)
+(def key&pattern (eval strucjure.bootstrap/key&pattern))
 (def pattern (eval strucjure.bootstrap/pattern))
 (def seq-pattern (eval strucjure.bootstrap/seq-pattern))
 
@@ -321,6 +337,7 @@
 (defn bootstrap []
   (map (fn [definition] (quote-def (macroexpand-1 definition)))
        (list
+
         '(defnmatch optional [elem]
            (and [(elem ?x) (& ?rest)] (leave rest)) x
            (and [(& ?rest)] (leave rest)) nil)
@@ -332,6 +349,9 @@
         '(defnmatch one-or-more [elem]
            (and [(elem ?x) (& ((zero-or-more elem) ?xs)) (& ?rest)] (leave rest)) (cons x xs))
 
+        '(defmatch key&pattern
+           [?key (pattern ?pattern)] [key pattern])
+
         '(defmatch pattern
            ;; BINDINGS
            '_ (->Leave nil)
@@ -340,6 +360,8 @@
            ;; LITERALS
            (and (guard (primitive? %)) ?literal) (literal-ast literal) ; primitives evaluate to themselves, so don't need quoting
            (and (guard (class-name? %)) ?class-name) (class-ast class-name)
+           (and (or clojure.lang.PersistentArrayMap clojure.lang.PersistentHashMap)
+                [(& ((zero-or-more key&pattern) ?keys&patterns))]) (map-ast keys&patterns)
 
            ;; SEQUENCES
            (and (guard (vector? %)) [(& ((zero-or-more seq-pattern) ?seq-patterns))]) (seqable-ast seq-patterns)
@@ -356,6 +378,7 @@
            (and (guard (symbol? %)) ?variable) (literal-ast variable)
 
            ;; IMPORTED MATCHES
+           ;; (and (guard (seq? %)) ['? ?predicate (pattern ?pattern)]) (predicate-ast predicate pattern)
            (and (guard (seq? %)) [?match (pattern ?pattern)]) (import-ast match pattern))
 
         '(defmatch seq-pattern

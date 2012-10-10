@@ -376,11 +376,11 @@
    '(defview pattern
       ;; BINDINGS
       '_ (->Leave nil)
-      (and (guard (binding? %)) ?binding) (->Bind (binding-name binding))
+      (and binding? ?binding) (->Bind (binding-name binding))
 
       ;; LITERALS
-      (and (guard (primitive? %)) ?literal) (literal-ast literal) ; primitives evaluate to themselves, so don't need quoting
-      (and (guard (class-name? %)) ?class-name) (class-ast class-name)
+      (and primitive? ?primitive) (literal-ast primitive) ; primitives evaluate to themselves, so don't need quoting
+      (and class-name? ?class-name) (class-ast class-name)
       (and (or clojure.lang.PersistentArrayMap clojure.lang.PersistentHashMap)
            [(& ((zero-or-more key&pattern) ?keys&patterns))]) (map-ast keys&patterns)
       (and java.util.regex.Pattern ?regex) (regex-ast regex)
@@ -388,29 +388,29 @@
       (and seq? [(or 'fn 'fn*) [?arg] (& ?body)]) (predicate-ast `(do ~@(clojure.walk/prewalk-replace {arg input-sym} body)))
 
       ;; SEQUENCES
-      (and (guard (vector? %)) [(& ((zero-or-more seq-pattern) ?seq-patterns))]) (seqable-ast seq-patterns)
+      (and vector? [(& ((zero-or-more seq-pattern) ?seq-patterns))]) (seqable-ast seq-patterns)
 
       ;; SPECIAL FORMS
-      (and (guard (seq? %)) ['quote ?quoted]) (literal-ast `(quote ~quoted))
-      (and (guard (seq? %)) ['guard ?form]) (->Guard form)
-      (and (guard (seq? %)) ['leave ?form]) (->Leave form)
-      (and (guard (seq? %)) ['and (& ((one-or-more pattern) ?patterns))]) (apply and-ast patterns)
-      (and (guard (seq? %)) ['seq (& ((one-or-more pattern) ?patterns))]) (apply seq-ast patterns)
-      (and (guard (seq? %)) ['or (& ((one-or-more pattern) ?patterns))]) (apply or-ast patterns)
+      (and seq? ['quote ?quoted]) (literal-ast `(quote ~quoted))
+      (and seq? ['guard ?form]) (->Guard form)
+      (and seq? ['leave ?form]) (->Leave form)
+      (and seq? ['and (& ((one-or-more pattern) ?patterns))]) (apply and-ast patterns)
+      (and seq? ['seq (& ((one-or-more pattern) ?patterns))]) (apply seq-ast patterns)
+      (and seq? ['or (& ((one-or-more pattern) ?patterns))]) (apply or-ast patterns)
 
       ;; EXTERNAL VARIABLES
-      (and (guard (symbol? %)) ?variable) (literal-ast variable)
+      (and symbol? ?variable) (literal-ast variable)
 
       ;; IMPORTED VIEWS
-      ;; (and (guard (seq? %)) ['? %predicate (pattern ?pattern)]) (predicate-ast predicate pattern)
-      (and (guard (seq? %)) [?view (pattern ?pattern)]) (import-ast view pattern))
+      ;; (and seq? ['? %predicate (pattern ?pattern)]) (predicate-ast predicate pattern)
+      (and seq? [?view (pattern ?pattern)]) (import-ast view pattern))
 
    '(defview seq-pattern
       ;; & PATTERNS
-      (and (guard (seq? %)) ['& (pattern ?pattern)]) pattern
+      (and seq? ['& (pattern ?pattern)]) pattern
 
       ;; ESCAPED PATTERNS
-      (and (guard (seq? %)) ['guard ?form]) (->Guard form)
+      (and seq? ['guard ?form]) (->Guard form)
 
       ;; ALL OTHER PATTERNS
       (pattern ?pattern) (head-ast pattern))])

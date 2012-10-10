@@ -3,7 +3,8 @@
         [slingshot.slingshot :only [throw+ try+]])
   (:require strucjure.bootstrap
             clojure.set
-            clojure.walk))
+            clojure.walk
+            clojure.pprint))
 
 ;; PEG parser / pattern matcher
 ;; (originally based on matchure)
@@ -421,9 +422,9 @@
 
 (defn bootstrap []
   (spit "src/strucjure/bootstrap.clj"
-        (pr-str
-         '(ns strucjure.bootstrap)
-         `(do ~@(map defview->clj parser)))))
+        (with-out-str
+          (clojure.pprint/pprint '(ns strucjure.bootstrap))
+          (clojure.pprint/pprint `(do ~@(map defview->clj parser))))))
 
 ;; TESTS
 

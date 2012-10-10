@@ -1,1 +1,1000 @@
-(ns strucjure.bootstrap) (do (def optional (quote (clojure.core/letfn [(thunk__19362 [input__19357 true-cont__19358 false-cont__19359] (if (clojure.core/or (clojure.core/instance? clojure.lang.Seqable input__19357) (clojure.core/nil? input__19357)) (clojure.core/let [left__19361 (clojure.core/seq input__19357)] (clojure.core/let [rest left__19361] (clojure.core/let [output__19360 nil] (.invoke true-cont__19358 output__19360 rest)))) (.invoke false-cont__19359)))] (clojure.core/fn [elem] (strucjure/->View (clojure.core/fn [input__19357 true-cont__19358 false-cont__19359] (if (clojure.core/or (clojure.core/instance? clojure.lang.Seqable input__19357) (clojure.core/nil? input__19357)) (clojure.core/let [left__19363 (clojure.core/seq input__19357)] (if (clojure.core/not= nil left__19363) (clojure.core/let [left__19364 (clojure.core/first left__19363)] ((.view-fn elem) left__19364 (clojure.core/fn [output__19365 rest__19366] (clojure.core/let [x output__19365] (if (clojure.core/= nil rest__19366) (clojure.core/let [left__19367 (clojure.core/next left__19363)] (clojure.core/let [rest left__19367] (clojure.core/let [output__19360 x] (.invoke true-cont__19358 output__19360 rest)))) (thunk__19362 input__19357 true-cont__19358 false-cont__19359)))) (clojure.core/fn [] (thunk__19362 input__19357 true-cont__19358 false-cont__19359)))) (thunk__19362 input__19357 true-cont__19358 false-cont__19359))) (thunk__19362 input__19357 true-cont__19358 false-cont__19359)))))))) (def zero-or-more (quote (clojure.core/letfn [(thunk__19386 [input__19381 true-cont__19382 false-cont__19383] (if (clojure.core/or (clojure.core/instance? clojure.lang.Seqable input__19381) (clojure.core/nil? input__19381)) (clojure.core/let [left__19385 (clojure.core/seq input__19381)] (clojure.core/let [rest left__19385] (clojure.core/let [output__19384 nil] (.invoke true-cont__19382 output__19384 rest)))) (.invoke false-cont__19383)))] (clojure.core/fn [elem] (strucjure/->View (clojure.core/fn [input__19381 true-cont__19382 false-cont__19383] (if (clojure.core/or (clojure.core/instance? clojure.lang.Seqable input__19381) (clojure.core/nil? input__19381)) (clojure.core/let [left__19387 (clojure.core/seq input__19381)] (if (clojure.core/not= nil left__19387) (clojure.core/let [left__19388 (clojure.core/first left__19387)] ((.view-fn elem) left__19388 (clojure.core/fn [output__19389 rest__19390] (clojure.core/let [x output__19389] (if (clojure.core/= nil rest__19390) (clojure.core/let [left__19391 (clojure.core/next left__19387)] ((.view-fn (zero-or-more elem)) left__19391 (clojure.core/fn [output__19392 rest__19393] (clojure.core/let [xs output__19392] (clojure.core/let [rest rest__19393] (clojure.core/let [output__19384 (cons x xs)] (.invoke true-cont__19382 output__19384 rest))))) (clojure.core/fn [] (thunk__19386 input__19381 true-cont__19382 false-cont__19383)))) (thunk__19386 input__19381 true-cont__19382 false-cont__19383)))) (clojure.core/fn [] (thunk__19386 input__19381 true-cont__19382 false-cont__19383)))) (thunk__19386 input__19381 true-cont__19382 false-cont__19383))) (thunk__19386 input__19381 true-cont__19382 false-cont__19383)))))))) (def one-or-more (quote (clojure.core/letfn [] (clojure.core/fn [elem] (strucjure/->View (clojure.core/fn [input__19405 true-cont__19406 false-cont__19407] (if (clojure.core/or (clojure.core/instance? clojure.lang.Seqable input__19405) (clojure.core/nil? input__19405)) (clojure.core/let [left__19409 (clojure.core/seq input__19405)] (if (clojure.core/not= nil left__19409) (clojure.core/let [left__19410 (clojure.core/first left__19409)] ((.view-fn elem) left__19410 (clojure.core/fn [output__19411 rest__19412] (clojure.core/let [x output__19411] (if (clojure.core/= nil rest__19412) (clojure.core/let [left__19413 (clojure.core/next left__19409)] ((.view-fn (zero-or-more elem)) left__19413 (clojure.core/fn [output__19414 rest__19415] (clojure.core/let [xs output__19414] (clojure.core/let [rest rest__19415] (clojure.core/let [output__19408 (cons x xs)] (.invoke true-cont__19406 output__19408 rest))))) (clojure.core/fn [] (.invoke false-cont__19407)))) (.invoke false-cont__19407)))) (clojure.core/fn [] (.invoke false-cont__19407)))) (.invoke false-cont__19407))) (.invoke false-cont__19407)))))))) (def key&pattern (quote (clojure.core/letfn [] (strucjure/->View (clojure.core/fn [input__19427 true-cont__19428 false-cont__19429] (if (clojure.core/or (clojure.core/instance? clojure.lang.Seqable input__19427) (clojure.core/nil? input__19427)) (clojure.core/let [left__19431 (clojure.core/seq input__19427)] (if (clojure.core/not= nil left__19431) (clojure.core/let [left__19432 (clojure.core/first left__19431)] (clojure.core/let [key left__19432] (clojure.core/let [left__19433 (clojure.core/next left__19431)] (if (clojure.core/not= nil left__19433) (clojure.core/let [left__19434 (clojure.core/first left__19433)] ((.view-fn pattern) left__19434 (clojure.core/fn [output__19435 rest__19436] (clojure.core/let [pattern output__19435] (if (clojure.core/= nil rest__19436) (clojure.core/let [left__19437 (clojure.core/next left__19433)] (if (clojure.core/= nil left__19437) (clojure.core/let [output__19430 [key pattern]] (.invoke true-cont__19428 output__19430 nil)) (.invoke false-cont__19429))) (.invoke false-cont__19429)))) (clojure.core/fn [] (.invoke false-cont__19429)))) (.invoke false-cont__19429))))) (.invoke false-cont__19429))) (.invoke false-cont__19429))))))) (def pattern (quote (clojure.core/letfn [(thunk__19526 [input__19515 true-cont__19516 false-cont__19517] (if (seq? input__19515) (if (clojure.core/or (clojure.core/instance? clojure.lang.Seqable input__19515) (clojure.core/nil? input__19515)) (clojure.core/let [left__19519 (clojure.core/seq input__19515)] (if (clojure.core/not= nil left__19519) (clojure.core/let [left__19520 (clojure.core/first left__19519)] (clojure.core/let [view left__19520] (clojure.core/let [left__19521 (clojure.core/next left__19519)] (if (clojure.core/not= nil left__19521) (clojure.core/let [left__19522 (clojure.core/first left__19521)] ((.view-fn pattern) left__19522 (clojure.core/fn [output__19523 rest__19524] (clojure.core/let [pattern output__19523] (if (clojure.core/= nil rest__19524) (clojure.core/let [left__19525 (clojure.core/next left__19521)] (if (clojure.core/= nil left__19525) (clojure.core/let [output__19518 (import-ast view pattern)] (.invoke true-cont__19516 output__19518 nil)) (.invoke false-cont__19517))) (.invoke false-cont__19517)))) (clojure.core/fn [] (.invoke false-cont__19517)))) (.invoke false-cont__19517))))) (.invoke false-cont__19517))) (.invoke false-cont__19517)) (.invoke false-cont__19517))) (thunk__19527 [input__19515 true-cont__19516 false-cont__19517] (if (symbol? input__19515) (clojure.core/let [variable input__19515] (clojure.core/let [output__19518 (literal-ast variable)] (.invoke true-cont__19516 output__19518 nil))) (thunk__19526 input__19515 true-cont__19516 false-cont__19517))) (thunk__19533 [input__19515 true-cont__19516 false-cont__19517] (if (seq? input__19515) (if (clojure.core/or (clojure.core/instance? clojure.lang.Seqable input__19515) (clojure.core/nil? input__19515)) (clojure.core/let [left__19528 (clojure.core/seq input__19515)] (if (clojure.core/not= nil left__19528) (clojure.core/let [left__19529 (clojure.core/first left__19528)] (if (clojure.core/= (quote or) left__19529) (clojure.core/let [left__19530 (clojure.core/next left__19528)] ((.view-fn (one-or-more pattern)) left__19530 (clojure.core/fn [output__19531 rest__19532] (clojure.core/let [patterns output__19531] (if (clojure.core/= nil rest__19532) (clojure.core/let [output__19518 (apply or-ast patterns)] (.invoke true-cont__19516 output__19518 nil)) (thunk__19527 input__19515 true-cont__19516 false-cont__19517)))) (clojure.core/fn [] (thunk__19527 input__19515 true-cont__19516 false-cont__19517)))) (thunk__19527 input__19515 true-cont__19516 false-cont__19517))) (thunk__19527 input__19515 true-cont__19516 false-cont__19517))) (thunk__19527 input__19515 true-cont__19516 false-cont__19517)) (thunk__19527 input__19515 true-cont__19516 false-cont__19517))) (thunk__19539 [input__19515 true-cont__19516 false-cont__19517] (if (seq? input__19515) (if (clojure.core/or (clojure.core/instance? clojure.lang.Seqable input__19515) (clojure.core/nil? input__19515)) (clojure.core/let [left__19534 (clojure.core/seq input__19515)] (if (clojure.core/not= nil left__19534) (clojure.core/let [left__19535 (clojure.core/first left__19534)] (if (clojure.core/= (quote seq) left__19535) (clojure.core/let [left__19536 (clojure.core/next left__19534)] ((.view-fn (one-or-more pattern)) left__19536 (clojure.core/fn [output__19537 rest__19538] (clojure.core/let [patterns output__19537] (if (clojure.core/= nil rest__19538) (clojure.core/let [output__19518 (apply seq-ast patterns)] (.invoke true-cont__19516 output__19518 nil)) (thunk__19533 input__19515 true-cont__19516 false-cont__19517)))) (clojure.core/fn [] (thunk__19533 input__19515 true-cont__19516 false-cont__19517)))) (thunk__19533 input__19515 true-cont__19516 false-cont__19517))) (thunk__19533 input__19515 true-cont__19516 false-cont__19517))) (thunk__19533 input__19515 true-cont__19516 false-cont__19517)) (thunk__19533 input__19515 true-cont__19516 false-cont__19517))) (thunk__19545 [input__19515 true-cont__19516 false-cont__19517] (if (seq? input__19515) (if (clojure.core/or (clojure.core/instance? clojure.lang.Seqable input__19515) (clojure.core/nil? input__19515)) (clojure.core/let [left__19540 (clojure.core/seq input__19515)] (if (clojure.core/not= nil left__19540) (clojure.core/let [left__19541 (clojure.core/first left__19540)] (if (clojure.core/= (quote and) left__19541) (clojure.core/let [left__19542 (clojure.core/next left__19540)] ((.view-fn (one-or-more pattern)) left__19542 (clojure.core/fn [output__19543 rest__19544] (clojure.core/let [patterns output__19543] (if (clojure.core/= nil rest__19544) (clojure.core/let [output__19518 (apply and-ast patterns)] (.invoke true-cont__19516 output__19518 nil)) (thunk__19539 input__19515 true-cont__19516 false-cont__19517)))) (clojure.core/fn [] (thunk__19539 input__19515 true-cont__19516 false-cont__19517)))) (thunk__19539 input__19515 true-cont__19516 false-cont__19517))) (thunk__19539 input__19515 true-cont__19516 false-cont__19517))) (thunk__19539 input__19515 true-cont__19516 false-cont__19517)) (thunk__19539 input__19515 true-cont__19516 false-cont__19517))) (thunk__19551 [input__19515 true-cont__19516 false-cont__19517] (if (seq? input__19515) (if (clojure.core/or (clojure.core/instance? clojure.lang.Seqable input__19515) (clojure.core/nil? input__19515)) (clojure.core/let [left__19546 (clojure.core/seq input__19515)] (if (clojure.core/not= nil left__19546) (clojure.core/let [left__19547 (clojure.core/first left__19546)] (if (clojure.core/= (quote leave) left__19547) (clojure.core/let [left__19548 (clojure.core/next left__19546)] (if (clojure.core/not= nil left__19548) (clojure.core/let [left__19549 (clojure.core/first left__19548)] (clojure.core/let [form left__19549] (clojure.core/let [left__19550 (clojure.core/next left__19548)] (if (clojure.core/= nil left__19550) (clojure.core/let [output__19518 (->Leave form)] (.invoke true-cont__19516 output__19518 nil)) (thunk__19545 input__19515 true-cont__19516 false-cont__19517))))) (thunk__19545 input__19515 true-cont__19516 false-cont__19517))) (thunk__19545 input__19515 true-cont__19516 false-cont__19517))) (thunk__19545 input__19515 true-cont__19516 false-cont__19517))) (thunk__19545 input__19515 true-cont__19516 false-cont__19517)) (thunk__19545 input__19515 true-cont__19516 false-cont__19517))) (thunk__19557 [input__19515 true-cont__19516 false-cont__19517] (if (seq? input__19515) (if (clojure.core/or (clojure.core/instance? clojure.lang.Seqable input__19515) (clojure.core/nil? input__19515)) (clojure.core/let [left__19552 (clojure.core/seq input__19515)] (if (clojure.core/not= nil left__19552) (clojure.core/let [left__19553 (clojure.core/first left__19552)] (if (clojure.core/= (quote guard) left__19553) (clojure.core/let [left__19554 (clojure.core/next left__19552)] (if (clojure.core/not= nil left__19554) (clojure.core/let [left__19555 (clojure.core/first left__19554)] (clojure.core/let [form left__19555] (clojure.core/let [left__19556 (clojure.core/next left__19554)] (if (clojure.core/= nil left__19556) (clojure.core/let [output__19518 (->Guard form)] (.invoke true-cont__19516 output__19518 nil)) (thunk__19551 input__19515 true-cont__19516 false-cont__19517))))) (thunk__19551 input__19515 true-cont__19516 false-cont__19517))) (thunk__19551 input__19515 true-cont__19516 false-cont__19517))) (thunk__19551 input__19515 true-cont__19516 false-cont__19517))) (thunk__19551 input__19515 true-cont__19516 false-cont__19517)) (thunk__19551 input__19515 true-cont__19516 false-cont__19517))) (thunk__19563 [input__19515 true-cont__19516 false-cont__19517] (if (seq? input__19515) (if (clojure.core/or (clojure.core/instance? clojure.lang.Seqable input__19515) (clojure.core/nil? input__19515)) (clojure.core/let [left__19558 (clojure.core/seq input__19515)] (if (clojure.core/not= nil left__19558) (clojure.core/let [left__19559 (clojure.core/first left__19558)] (if (clojure.core/= (quote quote) left__19559) (clojure.core/let [left__19560 (clojure.core/next left__19558)] (if (clojure.core/not= nil left__19560) (clojure.core/let [left__19561 (clojure.core/first left__19560)] (clojure.core/let [quoted left__19561] (clojure.core/let [left__19562 (clojure.core/next left__19560)] (if (clojure.core/= nil left__19562) (clojure.core/let [output__19518 (literal-ast (clojure.core/seq (clojure.core/concat (clojure.core/list (quote quote)) (clojure.core/list quoted))))] (.invoke true-cont__19516 output__19518 nil)) (thunk__19557 input__19515 true-cont__19516 false-cont__19517))))) (thunk__19557 input__19515 true-cont__19516 false-cont__19517))) (thunk__19557 input__19515 true-cont__19516 false-cont__19517))) (thunk__19557 input__19515 true-cont__19516 false-cont__19517))) (thunk__19557 input__19515 true-cont__19516 false-cont__19517)) (thunk__19557 input__19515 true-cont__19516 false-cont__19517))) (thunk__19567 [input__19515 true-cont__19516 false-cont__19517] (if (vector? input__19515) (if (clojure.core/or (clojure.core/instance? clojure.lang.Seqable input__19515) (clojure.core/nil? input__19515)) (clojure.core/let [left__19564 (clojure.core/seq input__19515)] ((.view-fn (zero-or-more seq-pattern)) left__19564 (clojure.core/fn [output__19565 rest__19566] (clojure.core/let [seq-patterns output__19565] (if (clojure.core/= nil rest__19566) (clojure.core/let [output__19518 (seqable-ast seq-patterns)] (.invoke true-cont__19516 output__19518 nil)) (thunk__19563 input__19515 true-cont__19516 false-cont__19517)))) (clojure.core/fn [] (thunk__19563 input__19515 true-cont__19516 false-cont__19517)))) (thunk__19563 input__19515 true-cont__19516 false-cont__19517)) (thunk__19563 input__19515 true-cont__19516 false-cont__19517))) (thunk__19577 [input__19515 true-cont__19516 false-cont__19517 input__19515 left__19568 left__19568 left__19568 true-case-input__19570] (if (clojure.core/= nil true-case-input__19570) (clojure.core/let [left__19571 (clojure.core/next left__19568)] (if (clojure.core/not= nil left__19571) (clojure.core/let [left__19572 (clojure.core/first left__19571)] (if (clojure.core/or (clojure.core/instance? clojure.lang.Seqable left__19572) (clojure.core/nil? left__19572)) (clojure.core/let [left__19573 (clojure.core/seq left__19572)] (if (clojure.core/not= nil left__19573) (clojure.core/let [left__19574 (clojure.core/first left__19573)] (clojure.core/let [arg left__19574] (clojure.core/let [left__19575 (clojure.core/next left__19573)] (if (clojure.core/= nil left__19575) (clojure.core/let [left__19576 (clojure.core/next left__19571)] (clojure.core/let [body left__19576] (clojure.core/let [output__19518 (predicate-ast (clojure.core/seq (clojure.core/concat (clojure.core/list (quote do)) (clojure.walk/prewalk-replace {arg input-sym} body))))] (.invoke true-cont__19516 output__19518 nil)))) (thunk__19567 input__19515 true-cont__19516 false-cont__19517))))) (thunk__19567 input__19515 true-cont__19516 false-cont__19517))) (thunk__19567 input__19515 true-cont__19516 false-cont__19517))) (thunk__19567 input__19515 true-cont__19516 false-cont__19517))) (thunk__19567 input__19515 true-cont__19516 false-cont__19517))) (thunk__19578 [input__19515 true-cont__19516 false-cont__19517 input__19515 left__19568 left__19568 left__19568 left__19569 left__19569] (if (clojure.core/= (quote fn*) left__19569) (thunk__19577 input__19515 true-cont__19516 false-cont__19517 input__19515 left__19568 left__19568 left__19568 nil) (thunk__19567 input__19515 true-cont__19516 false-cont__19517))) (thunk__19579 [input__19515 true-cont__19516 false-cont__19517] (if (seq? input__19515) (if (clojure.core/or (clojure.core/instance? clojure.lang.Seqable input__19515) (clojure.core/nil? input__19515)) (clojure.core/let [left__19568 (clojure.core/seq input__19515)] (if (clojure.core/not= nil left__19568) (clojure.core/let [left__19569 (clojure.core/first left__19568)] (if (clojure.core/= (quote fn) left__19569) (thunk__19577 input__19515 true-cont__19516 false-cont__19517 input__19515 left__19568 left__19568 left__19568 nil) (thunk__19578 input__19515 true-cont__19516 false-cont__19517 input__19515 left__19568 left__19568 left__19568 left__19569 left__19569))) (thunk__19567 input__19515 true-cont__19516 false-cont__19517))) (thunk__19567 input__19515 true-cont__19516 false-cont__19517)) (thunk__19567 input__19515 true-cont__19516 false-cont__19517))) (thunk__19580 [input__19515 true-cont__19516 false-cont__19517] (if (predicate? input__19515) (clojure.core/let [predicate input__19515] (clojure.core/let [output__19518 (predicate-ast (clojure.core/seq (clojure.core/concat (clojure.core/list predicate) (clojure.core/list input-sym))))] (.invoke true-cont__19516 output__19518 nil))) (thunk__19579 input__19515 true-cont__19516 false-cont__19517))) (thunk__19581 [input__19515 true-cont__19516 false-cont__19517] (if (clojure.core/instance? java.util.regex.Pattern input__19515) (clojure.core/let [regex input__19515] (clojure.core/let [output__19518 (regex-ast regex)] (.invoke true-cont__19516 output__19518 nil))) (thunk__19580 input__19515 true-cont__19516 false-cont__19517))) (thunk__19586 [input__19515 true-cont__19516 false-cont__19517] (if (clojure.core/or (clojure.core/instance? clojure.lang.Seqable input__19515) (clojure.core/nil? input__19515)) (clojure.core/let [left__19583 (clojure.core/seq input__19515)] ((.view-fn (zero-or-more key&pattern)) left__19583 (clojure.core/fn [output__19584 rest__19585] (clojure.core/let [keys&patterns output__19584] (if (clojure.core/= nil rest__19585) (clojure.core/let [output__19518 (map-ast keys&patterns)] (.invoke true-cont__19516 output__19518 nil)) (thunk__19581 input__19515 true-cont__19516 false-cont__19517)))) (clojure.core/fn [] (thunk__19581 input__19515 true-cont__19516 false-cont__19517)))) (thunk__19581 input__19515 true-cont__19516 false-cont__19517))) (thunk__19587 [input__19515 true-cont__19516 false-cont__19517] (if (clojure.core/instance? clojure.lang.PersistentHashMap input__19515) (thunk__19586 input__19515 true-cont__19516 false-cont__19517) (thunk__19581 input__19515 true-cont__19516 false-cont__19517))) (thunk__19588 [input__19515 true-cont__19516 false-cont__19517] (if (clojure.core/instance? clojure.lang.PersistentArrayMap input__19515) (thunk__19586 input__19515 true-cont__19516 false-cont__19517) (thunk__19587 input__19515 true-cont__19516 false-cont__19517))) (thunk__19589 [input__19515 true-cont__19516 false-cont__19517] (if (class-name? input__19515) (clojure.core/let [class-name input__19515] (clojure.core/let [output__19518 (class-ast class-name)] (.invoke true-cont__19516 output__19518 nil))) (thunk__19588 input__19515 true-cont__19516 false-cont__19517))) (thunk__19590 [input__19515 true-cont__19516 false-cont__19517] (if (primitive? input__19515) (clojure.core/let [primitive input__19515] (clojure.core/let [output__19518 (literal-ast primitive)] (.invoke true-cont__19516 output__19518 nil))) (thunk__19589 input__19515 true-cont__19516 false-cont__19517))) (thunk__19591 [input__19515 true-cont__19516 false-cont__19517] (if (binding? input__19515) (clojure.core/let [binding input__19515] (clojure.core/let [output__19518 (->Bind (binding-name binding))] (.invoke true-cont__19516 output__19518 nil))) (thunk__19590 input__19515 true-cont__19516 false-cont__19517)))] (strucjure/->View (clojure.core/fn [input__19515 true-cont__19516 false-cont__19517] (if (clojure.core/= (quote _) input__19515) (clojure.core/let [output__19518 (->Leave nil)] (.invoke true-cont__19516 output__19518 nil)) (thunk__19591 input__19515 true-cont__19516 false-cont__19517))))))) (def seq-pattern (quote (clojure.core/letfn [(thunk__19618 [input__19612 true-cont__19613 false-cont__19614] ((.view-fn pattern) input__19612 (clojure.core/fn [output__19616 rest__19617] (clojure.core/let [pattern output__19616] (clojure.core/let [output__19615 (head-ast pattern)] (.invoke true-cont__19613 output__19615 rest__19617)))) (clojure.core/fn [] (.invoke false-cont__19614)))) (thunk__19624 [input__19612 true-cont__19613 false-cont__19614] (if (seq? input__19612) (if (clojure.core/or (clojure.core/instance? clojure.lang.Seqable input__19612) (clojure.core/nil? input__19612)) (clojure.core/let [left__19619 (clojure.core/seq input__19612)] (if (clojure.core/not= nil left__19619) (clojure.core/let [left__19620 (clojure.core/first left__19619)] (if (clojure.core/= (quote guard) left__19620) (clojure.core/let [left__19621 (clojure.core/next left__19619)] (if (clojure.core/not= nil left__19621) (clojure.core/let [left__19622 (clojure.core/first left__19621)] (clojure.core/let [form left__19622] (clojure.core/let [left__19623 (clojure.core/next left__19621)] (if (clojure.core/= nil left__19623) (clojure.core/let [output__19615 (->Guard form)] (.invoke true-cont__19613 output__19615 nil)) (thunk__19618 input__19612 true-cont__19613 false-cont__19614))))) (thunk__19618 input__19612 true-cont__19613 false-cont__19614))) (thunk__19618 input__19612 true-cont__19613 false-cont__19614))) (thunk__19618 input__19612 true-cont__19613 false-cont__19614))) (thunk__19618 input__19612 true-cont__19613 false-cont__19614)) (thunk__19618 input__19612 true-cont__19613 false-cont__19614)))] (strucjure/->View (clojure.core/fn [input__19612 true-cont__19613 false-cont__19614] (if (seq? input__19612) (if (clojure.core/or (clojure.core/instance? clojure.lang.Seqable input__19612) (clojure.core/nil? input__19612)) (clojure.core/let [left__19625 (clojure.core/seq input__19612)] (if (clojure.core/not= nil left__19625) (clojure.core/let [left__19626 (clojure.core/first left__19625)] (if (clojure.core/= (quote &) left__19626) (clojure.core/let [left__19627 (clojure.core/next left__19625)] (if (clojure.core/not= nil left__19627) (clojure.core/let [left__19628 (clojure.core/first left__19627)] ((.view-fn pattern) left__19628 (clojure.core/fn [output__19629 rest__19630] (clojure.core/let [pattern output__19629] (if (clojure.core/= nil rest__19630) (clojure.core/let [left__19631 (clojure.core/next left__19627)] (if (clojure.core/= nil left__19631) (clojure.core/let [output__19615 pattern] (.invoke true-cont__19613 output__19615 nil)) (thunk__19624 input__19612 true-cont__19613 false-cont__19614))) (thunk__19624 input__19612 true-cont__19613 false-cont__19614)))) (clojure.core/fn [] (thunk__19624 input__19612 true-cont__19613 false-cont__19614)))) (thunk__19624 input__19612 true-cont__19613 false-cont__19614))) (thunk__19624 input__19612 true-cont__19613 false-cont__19614))) (thunk__19624 input__19612 true-cont__19613 false-cont__19614))) (thunk__19624 input__19612 true-cont__19613 false-cont__19614)) (thunk__19624 input__19612 true-cont__19613 false-cont__19614))))))))
+(ns strucjure.bootstrap)
+(do
+ (def
+  optional
+  '(clojure.core/letfn
+    [(thunk__7212
+      [input__7207 true-cont__7208 false-cont__7209]
+      (if
+       (clojure.core/or
+        (clojure.core/instance? clojure.lang.Seqable input__7207)
+        (clojure.core/nil? input__7207))
+       (clojure.core/let
+        [left__7211 (clojure.core/seq input__7207)]
+        (clojure.core/let
+         [rest left__7211]
+         (clojure.core/let
+          [output__7210 nil]
+          (.invoke true-cont__7208 output__7210 rest))))
+       (.invoke false-cont__7209)))]
+    (clojure.core/fn
+     [elem]
+     (strucjure/->View
+      (clojure.core/fn
+       [input__7207 true-cont__7208 false-cont__7209]
+       (if
+        (clojure.core/or
+         (clojure.core/instance? clojure.lang.Seqable input__7207)
+         (clojure.core/nil? input__7207))
+        (clojure.core/let
+         [left__7213 (clojure.core/seq input__7207)]
+         (if
+          (clojure.core/not= nil left__7213)
+          (clojure.core/let
+           [left__7214 (clojure.core/first left__7213)]
+           ((.view-fn elem)
+            left__7214
+            (clojure.core/fn
+             [output__7215 rest__7216]
+             (clojure.core/let
+              [x output__7215]
+              (if
+               (clojure.core/= nil rest__7216)
+               (clojure.core/let
+                [left__7217 (clojure.core/next left__7213)]
+                (clojure.core/let
+                 [rest left__7217]
+                 (clojure.core/let
+                  [output__7210 x]
+                  (.invoke true-cont__7208 output__7210 rest))))
+               (thunk__7212
+                input__7207
+                true-cont__7208
+                false-cont__7209))))
+            (clojure.core/fn
+             []
+             (thunk__7212
+              input__7207
+              true-cont__7208
+              false-cont__7209))))
+          (thunk__7212 input__7207 true-cont__7208 false-cont__7209)))
+        (thunk__7212
+         input__7207
+         true-cont__7208
+         false-cont__7209)))))))
+ (def
+  zero-or-more
+  '(clojure.core/letfn
+    [(thunk__7236
+      [input__7231 true-cont__7232 false-cont__7233]
+      (if
+       (clojure.core/or
+        (clojure.core/instance? clojure.lang.Seqable input__7231)
+        (clojure.core/nil? input__7231))
+       (clojure.core/let
+        [left__7235 (clojure.core/seq input__7231)]
+        (clojure.core/let
+         [rest left__7235]
+         (clojure.core/let
+          [output__7234 nil]
+          (.invoke true-cont__7232 output__7234 rest))))
+       (.invoke false-cont__7233)))]
+    (clojure.core/fn
+     [elem]
+     (strucjure/->View
+      (clojure.core/fn
+       [input__7231 true-cont__7232 false-cont__7233]
+       (if
+        (clojure.core/or
+         (clojure.core/instance? clojure.lang.Seqable input__7231)
+         (clojure.core/nil? input__7231))
+        (clojure.core/let
+         [left__7237 (clojure.core/seq input__7231)]
+         (if
+          (clojure.core/not= nil left__7237)
+          (clojure.core/let
+           [left__7238 (clojure.core/first left__7237)]
+           ((.view-fn elem)
+            left__7238
+            (clojure.core/fn
+             [output__7239 rest__7240]
+             (clojure.core/let
+              [x output__7239]
+              (if
+               (clojure.core/= nil rest__7240)
+               (clojure.core/let
+                [left__7241 (clojure.core/next left__7237)]
+                ((.view-fn (zero-or-more elem))
+                 left__7241
+                 (clojure.core/fn
+                  [output__7242 rest__7243]
+                  (clojure.core/let
+                   [xs output__7242]
+                   (clojure.core/let
+                    [rest rest__7243]
+                    (clojure.core/let
+                     [output__7234 (cons x xs)]
+                     (.invoke true-cont__7232 output__7234 rest)))))
+                 (clojure.core/fn
+                  []
+                  (thunk__7236
+                   input__7231
+                   true-cont__7232
+                   false-cont__7233))))
+               (thunk__7236
+                input__7231
+                true-cont__7232
+                false-cont__7233))))
+            (clojure.core/fn
+             []
+             (thunk__7236
+              input__7231
+              true-cont__7232
+              false-cont__7233))))
+          (thunk__7236 input__7231 true-cont__7232 false-cont__7233)))
+        (thunk__7236
+         input__7231
+         true-cont__7232
+         false-cont__7233)))))))
+ (def
+  one-or-more
+  '(clojure.core/letfn
+    []
+    (clojure.core/fn
+     [elem]
+     (strucjure/->View
+      (clojure.core/fn
+       [input__7255 true-cont__7256 false-cont__7257]
+       (if
+        (clojure.core/or
+         (clojure.core/instance? clojure.lang.Seqable input__7255)
+         (clojure.core/nil? input__7255))
+        (clojure.core/let
+         [left__7259 (clojure.core/seq input__7255)]
+         (if
+          (clojure.core/not= nil left__7259)
+          (clojure.core/let
+           [left__7260 (clojure.core/first left__7259)]
+           ((.view-fn elem)
+            left__7260
+            (clojure.core/fn
+             [output__7261 rest__7262]
+             (clojure.core/let
+              [x output__7261]
+              (if
+               (clojure.core/= nil rest__7262)
+               (clojure.core/let
+                [left__7263 (clojure.core/next left__7259)]
+                ((.view-fn (zero-or-more elem))
+                 left__7263
+                 (clojure.core/fn
+                  [output__7264 rest__7265]
+                  (clojure.core/let
+                   [xs output__7264]
+                   (clojure.core/let
+                    [rest rest__7265]
+                    (clojure.core/let
+                     [output__7258 (cons x xs)]
+                     (.invoke true-cont__7256 output__7258 rest)))))
+                 (clojure.core/fn [] (.invoke false-cont__7257))))
+               (.invoke false-cont__7257))))
+            (clojure.core/fn [] (.invoke false-cont__7257))))
+          (.invoke false-cont__7257)))
+        (.invoke false-cont__7257)))))))
+ (def
+  key&pattern
+  '(clojure.core/letfn
+    []
+    (strucjure/->View
+     (clojure.core/fn
+      [input__7277 true-cont__7278 false-cont__7279]
+      (if
+       (clojure.core/or
+        (clojure.core/instance? clojure.lang.Seqable input__7277)
+        (clojure.core/nil? input__7277))
+       (clojure.core/let
+        [left__7281 (clojure.core/seq input__7277)]
+        (if
+         (clojure.core/not= nil left__7281)
+         (clojure.core/let
+          [left__7282 (clojure.core/first left__7281)]
+          (clojure.core/let
+           [key left__7282]
+           (clojure.core/let
+            [left__7283 (clojure.core/next left__7281)]
+            (if
+             (clojure.core/not= nil left__7283)
+             (clojure.core/let
+              [left__7284 (clojure.core/first left__7283)]
+              ((.view-fn pattern)
+               left__7284
+               (clojure.core/fn
+                [output__7285 rest__7286]
+                (clojure.core/let
+                 [pattern output__7285]
+                 (if
+                  (clojure.core/= nil rest__7286)
+                  (clojure.core/let
+                   [left__7287 (clojure.core/next left__7283)]
+                   (if
+                    (clojure.core/= nil left__7287)
+                    (clojure.core/let
+                     [output__7280 [key pattern]]
+                     (.invoke true-cont__7278 output__7280 nil))
+                    (.invoke false-cont__7279)))
+                  (.invoke false-cont__7279))))
+               (clojure.core/fn [] (.invoke false-cont__7279))))
+             (.invoke false-cont__7279)))))
+         (.invoke false-cont__7279)))
+       (.invoke false-cont__7279))))))
+ (def
+  pattern
+  '(clojure.core/letfn
+    [(thunk__7382
+      [input__7371 true-cont__7372 false-cont__7373]
+      (if
+       (seq? input__7371)
+       (if
+        (clojure.core/or
+         (clojure.core/instance? clojure.lang.Seqable input__7371)
+         (clojure.core/nil? input__7371))
+        (clojure.core/let
+         [left__7375 (clojure.core/seq input__7371)]
+         (if
+          (clojure.core/not= nil left__7375)
+          (clojure.core/let
+           [left__7376 (clojure.core/first left__7375)]
+           (clojure.core/let
+            [view left__7376]
+            (clojure.core/let
+             [left__7377 (clojure.core/next left__7375)]
+             (if
+              (clojure.core/not= nil left__7377)
+              (clojure.core/let
+               [left__7378 (clojure.core/first left__7377)]
+               ((.view-fn pattern)
+                left__7378
+                (clojure.core/fn
+                 [output__7379 rest__7380]
+                 (clojure.core/let
+                  [pattern output__7379]
+                  (if
+                   (clojure.core/= nil rest__7380)
+                   (clojure.core/let
+                    [left__7381 (clojure.core/next left__7377)]
+                    (if
+                     (clojure.core/= nil left__7381)
+                     (clojure.core/let
+                      [output__7374 (import-ast view pattern)]
+                      (.invoke true-cont__7372 output__7374 nil))
+                     (.invoke false-cont__7373)))
+                   (.invoke false-cont__7373))))
+                (clojure.core/fn [] (.invoke false-cont__7373))))
+              (.invoke false-cont__7373)))))
+          (.invoke false-cont__7373)))
+        (.invoke false-cont__7373))
+       (.invoke false-cont__7373)))
+     (thunk__7383
+      [input__7371 true-cont__7372 false-cont__7373]
+      (if
+       (symbol? input__7371)
+       (clojure.core/let
+        [variable input__7371]
+        (clojure.core/let
+         [output__7374 (literal-ast variable)]
+         (.invoke true-cont__7372 output__7374 nil)))
+       (thunk__7382 input__7371 true-cont__7372 false-cont__7373)))
+     (thunk__7389
+      [input__7371 true-cont__7372 false-cont__7373]
+      (if
+       (seq? input__7371)
+       (if
+        (clojure.core/or
+         (clojure.core/instance? clojure.lang.Seqable input__7371)
+         (clojure.core/nil? input__7371))
+        (clojure.core/let
+         [left__7384 (clojure.core/seq input__7371)]
+         (if
+          (clojure.core/not= nil left__7384)
+          (clojure.core/let
+           [left__7385 (clojure.core/first left__7384)]
+           (if
+            (clojure.core/= 'or left__7385)
+            (clojure.core/let
+             [left__7386 (clojure.core/next left__7384)]
+             ((.view-fn (one-or-more pattern))
+              left__7386
+              (clojure.core/fn
+               [output__7387 rest__7388]
+               (clojure.core/let
+                [patterns output__7387]
+                (if
+                 (clojure.core/= nil rest__7388)
+                 (clojure.core/let
+                  [output__7374 (apply or-ast patterns)]
+                  (.invoke true-cont__7372 output__7374 nil))
+                 (thunk__7383
+                  input__7371
+                  true-cont__7372
+                  false-cont__7373))))
+              (clojure.core/fn
+               []
+               (thunk__7383
+                input__7371
+                true-cont__7372
+                false-cont__7373))))
+            (thunk__7383
+             input__7371
+             true-cont__7372
+             false-cont__7373)))
+          (thunk__7383 input__7371 true-cont__7372 false-cont__7373)))
+        (thunk__7383 input__7371 true-cont__7372 false-cont__7373))
+       (thunk__7383 input__7371 true-cont__7372 false-cont__7373)))
+     (thunk__7395
+      [input__7371 true-cont__7372 false-cont__7373]
+      (if
+       (seq? input__7371)
+       (if
+        (clojure.core/or
+         (clojure.core/instance? clojure.lang.Seqable input__7371)
+         (clojure.core/nil? input__7371))
+        (clojure.core/let
+         [left__7390 (clojure.core/seq input__7371)]
+         (if
+          (clojure.core/not= nil left__7390)
+          (clojure.core/let
+           [left__7391 (clojure.core/first left__7390)]
+           (if
+            (clojure.core/= 'seq left__7391)
+            (clojure.core/let
+             [left__7392 (clojure.core/next left__7390)]
+             ((.view-fn (one-or-more pattern))
+              left__7392
+              (clojure.core/fn
+               [output__7393 rest__7394]
+               (clojure.core/let
+                [patterns output__7393]
+                (if
+                 (clojure.core/= nil rest__7394)
+                 (clojure.core/let
+                  [output__7374 (apply seq-ast patterns)]
+                  (.invoke true-cont__7372 output__7374 nil))
+                 (thunk__7389
+                  input__7371
+                  true-cont__7372
+                  false-cont__7373))))
+              (clojure.core/fn
+               []
+               (thunk__7389
+                input__7371
+                true-cont__7372
+                false-cont__7373))))
+            (thunk__7389
+             input__7371
+             true-cont__7372
+             false-cont__7373)))
+          (thunk__7389 input__7371 true-cont__7372 false-cont__7373)))
+        (thunk__7389 input__7371 true-cont__7372 false-cont__7373))
+       (thunk__7389 input__7371 true-cont__7372 false-cont__7373)))
+     (thunk__7401
+      [input__7371 true-cont__7372 false-cont__7373]
+      (if
+       (seq? input__7371)
+       (if
+        (clojure.core/or
+         (clojure.core/instance? clojure.lang.Seqable input__7371)
+         (clojure.core/nil? input__7371))
+        (clojure.core/let
+         [left__7396 (clojure.core/seq input__7371)]
+         (if
+          (clojure.core/not= nil left__7396)
+          (clojure.core/let
+           [left__7397 (clojure.core/first left__7396)]
+           (if
+            (clojure.core/= 'and left__7397)
+            (clojure.core/let
+             [left__7398 (clojure.core/next left__7396)]
+             ((.view-fn (one-or-more pattern))
+              left__7398
+              (clojure.core/fn
+               [output__7399 rest__7400]
+               (clojure.core/let
+                [patterns output__7399]
+                (if
+                 (clojure.core/= nil rest__7400)
+                 (clojure.core/let
+                  [output__7374 (apply and-ast patterns)]
+                  (.invoke true-cont__7372 output__7374 nil))
+                 (thunk__7395
+                  input__7371
+                  true-cont__7372
+                  false-cont__7373))))
+              (clojure.core/fn
+               []
+               (thunk__7395
+                input__7371
+                true-cont__7372
+                false-cont__7373))))
+            (thunk__7395
+             input__7371
+             true-cont__7372
+             false-cont__7373)))
+          (thunk__7395 input__7371 true-cont__7372 false-cont__7373)))
+        (thunk__7395 input__7371 true-cont__7372 false-cont__7373))
+       (thunk__7395 input__7371 true-cont__7372 false-cont__7373)))
+     (thunk__7407
+      [input__7371 true-cont__7372 false-cont__7373]
+      (if
+       (seq? input__7371)
+       (if
+        (clojure.core/or
+         (clojure.core/instance? clojure.lang.Seqable input__7371)
+         (clojure.core/nil? input__7371))
+        (clojure.core/let
+         [left__7402 (clojure.core/seq input__7371)]
+         (if
+          (clojure.core/not= nil left__7402)
+          (clojure.core/let
+           [left__7403 (clojure.core/first left__7402)]
+           (if
+            (clojure.core/= 'leave left__7403)
+            (clojure.core/let
+             [left__7404 (clojure.core/next left__7402)]
+             (if
+              (clojure.core/not= nil left__7404)
+              (clojure.core/let
+               [left__7405 (clojure.core/first left__7404)]
+               (clojure.core/let
+                [form left__7405]
+                (clojure.core/let
+                 [left__7406 (clojure.core/next left__7404)]
+                 (if
+                  (clojure.core/= nil left__7406)
+                  (clojure.core/let
+                   [output__7374 (->Leave form)]
+                   (.invoke true-cont__7372 output__7374 nil))
+                  (thunk__7401
+                   input__7371
+                   true-cont__7372
+                   false-cont__7373)))))
+              (thunk__7401
+               input__7371
+               true-cont__7372
+               false-cont__7373)))
+            (thunk__7401
+             input__7371
+             true-cont__7372
+             false-cont__7373)))
+          (thunk__7401 input__7371 true-cont__7372 false-cont__7373)))
+        (thunk__7401 input__7371 true-cont__7372 false-cont__7373))
+       (thunk__7401 input__7371 true-cont__7372 false-cont__7373)))
+     (thunk__7413
+      [input__7371 true-cont__7372 false-cont__7373]
+      (if
+       (seq? input__7371)
+       (if
+        (clojure.core/or
+         (clojure.core/instance? clojure.lang.Seqable input__7371)
+         (clojure.core/nil? input__7371))
+        (clojure.core/let
+         [left__7408 (clojure.core/seq input__7371)]
+         (if
+          (clojure.core/not= nil left__7408)
+          (clojure.core/let
+           [left__7409 (clojure.core/first left__7408)]
+           (if
+            (clojure.core/= 'guard left__7409)
+            (clojure.core/let
+             [left__7410 (clojure.core/next left__7408)]
+             (if
+              (clojure.core/not= nil left__7410)
+              (clojure.core/let
+               [left__7411 (clojure.core/first left__7410)]
+               (clojure.core/let
+                [form left__7411]
+                (clojure.core/let
+                 [left__7412 (clojure.core/next left__7410)]
+                 (if
+                  (clojure.core/= nil left__7412)
+                  (clojure.core/let
+                   [output__7374 (->Guard form)]
+                   (.invoke true-cont__7372 output__7374 nil))
+                  (thunk__7407
+                   input__7371
+                   true-cont__7372
+                   false-cont__7373)))))
+              (thunk__7407
+               input__7371
+               true-cont__7372
+               false-cont__7373)))
+            (thunk__7407
+             input__7371
+             true-cont__7372
+             false-cont__7373)))
+          (thunk__7407 input__7371 true-cont__7372 false-cont__7373)))
+        (thunk__7407 input__7371 true-cont__7372 false-cont__7373))
+       (thunk__7407 input__7371 true-cont__7372 false-cont__7373)))
+     (thunk__7419
+      [input__7371 true-cont__7372 false-cont__7373]
+      (if
+       (seq? input__7371)
+       (if
+        (clojure.core/or
+         (clojure.core/instance? clojure.lang.Seqable input__7371)
+         (clojure.core/nil? input__7371))
+        (clojure.core/let
+         [left__7414 (clojure.core/seq input__7371)]
+         (if
+          (clojure.core/not= nil left__7414)
+          (clojure.core/let
+           [left__7415 (clojure.core/first left__7414)]
+           (if
+            (clojure.core/= 'quote left__7415)
+            (clojure.core/let
+             [left__7416 (clojure.core/next left__7414)]
+             (if
+              (clojure.core/not= nil left__7416)
+              (clojure.core/let
+               [left__7417 (clojure.core/first left__7416)]
+               (clojure.core/let
+                [quoted left__7417]
+                (clojure.core/let
+                 [left__7418 (clojure.core/next left__7416)]
+                 (if
+                  (clojure.core/= nil left__7418)
+                  (clojure.core/let
+                   [output__7374
+                    (literal-ast
+                     (clojure.core/seq
+                      (clojure.core/concat
+                       (clojure.core/list 'quote)
+                       (clojure.core/list quoted))))]
+                   (.invoke true-cont__7372 output__7374 nil))
+                  (thunk__7413
+                   input__7371
+                   true-cont__7372
+                   false-cont__7373)))))
+              (thunk__7413
+               input__7371
+               true-cont__7372
+               false-cont__7373)))
+            (thunk__7413
+             input__7371
+             true-cont__7372
+             false-cont__7373)))
+          (thunk__7413 input__7371 true-cont__7372 false-cont__7373)))
+        (thunk__7413 input__7371 true-cont__7372 false-cont__7373))
+       (thunk__7413 input__7371 true-cont__7372 false-cont__7373)))
+     (thunk__7423
+      [input__7371 true-cont__7372 false-cont__7373]
+      (if
+       (vector? input__7371)
+       (if
+        (clojure.core/or
+         (clojure.core/instance? clojure.lang.Seqable input__7371)
+         (clojure.core/nil? input__7371))
+        (clojure.core/let
+         [left__7420 (clojure.core/seq input__7371)]
+         ((.view-fn (zero-or-more seq-pattern))
+          left__7420
+          (clojure.core/fn
+           [output__7421 rest__7422]
+           (clojure.core/let
+            [seq-patterns output__7421]
+            (if
+             (clojure.core/= nil rest__7422)
+             (clojure.core/let
+              [output__7374 (seqable-ast seq-patterns)]
+              (.invoke true-cont__7372 output__7374 nil))
+             (thunk__7419
+              input__7371
+              true-cont__7372
+              false-cont__7373))))
+          (clojure.core/fn
+           []
+           (thunk__7419
+            input__7371
+            true-cont__7372
+            false-cont__7373))))
+        (thunk__7419 input__7371 true-cont__7372 false-cont__7373))
+       (thunk__7419 input__7371 true-cont__7372 false-cont__7373)))
+     (thunk__7433
+      [input__7371
+       true-cont__7372
+       false-cont__7373
+       input__7371
+       left__7424
+       left__7424
+       left__7424
+       true-case-input__7426]
+      (if
+       (clojure.core/= nil true-case-input__7426)
+       (clojure.core/let
+        [left__7427 (clojure.core/next left__7424)]
+        (if
+         (clojure.core/not= nil left__7427)
+         (clojure.core/let
+          [left__7428 (clojure.core/first left__7427)]
+          (if
+           (clojure.core/or
+            (clojure.core/instance? clojure.lang.Seqable left__7428)
+            (clojure.core/nil? left__7428))
+           (clojure.core/let
+            [left__7429 (clojure.core/seq left__7428)]
+            (if
+             (clojure.core/not= nil left__7429)
+             (clojure.core/let
+              [left__7430 (clojure.core/first left__7429)]
+              (clojure.core/let
+               [arg left__7430]
+               (clojure.core/let
+                [left__7431 (clojure.core/next left__7429)]
+                (if
+                 (clojure.core/= nil left__7431)
+                 (clojure.core/let
+                  [left__7432 (clojure.core/next left__7427)]
+                  (clojure.core/let
+                   [body left__7432]
+                   (clojure.core/let
+                    [output__7374
+                     (predicate-ast
+                      (clojure.core/seq
+                       (clojure.core/concat
+                        (clojure.core/list 'do)
+                        (clojure.walk/prewalk-replace
+                         {arg input-sym}
+                         body))))]
+                    (.invoke true-cont__7372 output__7374 nil))))
+                 (thunk__7423
+                  input__7371
+                  true-cont__7372
+                  false-cont__7373)))))
+             (thunk__7423
+              input__7371
+              true-cont__7372
+              false-cont__7373)))
+           (thunk__7423 input__7371 true-cont__7372 false-cont__7373)))
+         (thunk__7423 input__7371 true-cont__7372 false-cont__7373)))
+       (thunk__7423 input__7371 true-cont__7372 false-cont__7373)))
+     (thunk__7434
+      [input__7371
+       true-cont__7372
+       false-cont__7373
+       input__7371
+       left__7424
+       left__7424
+       left__7424
+       left__7425
+       left__7425]
+      (if
+       (clojure.core/= 'fn* left__7425)
+       (thunk__7433
+        input__7371
+        true-cont__7372
+        false-cont__7373
+        input__7371
+        left__7424
+        left__7424
+        left__7424
+        nil)
+       (thunk__7423 input__7371 true-cont__7372 false-cont__7373)))
+     (thunk__7435
+      [input__7371 true-cont__7372 false-cont__7373]
+      (if
+       (seq? input__7371)
+       (if
+        (clojure.core/or
+         (clojure.core/instance? clojure.lang.Seqable input__7371)
+         (clojure.core/nil? input__7371))
+        (clojure.core/let
+         [left__7424 (clojure.core/seq input__7371)]
+         (if
+          (clojure.core/not= nil left__7424)
+          (clojure.core/let
+           [left__7425 (clojure.core/first left__7424)]
+           (if
+            (clojure.core/= 'fn left__7425)
+            (thunk__7433
+             input__7371
+             true-cont__7372
+             false-cont__7373
+             input__7371
+             left__7424
+             left__7424
+             left__7424
+             nil)
+            (thunk__7434
+             input__7371
+             true-cont__7372
+             false-cont__7373
+             input__7371
+             left__7424
+             left__7424
+             left__7424
+             left__7425
+             left__7425)))
+          (thunk__7423 input__7371 true-cont__7372 false-cont__7373)))
+        (thunk__7423 input__7371 true-cont__7372 false-cont__7373))
+       (thunk__7423 input__7371 true-cont__7372 false-cont__7373)))
+     (thunk__7436
+      [input__7371 true-cont__7372 false-cont__7373]
+      (if
+       (predicate? input__7371)
+       (clojure.core/let
+        [predicate input__7371]
+        (clojure.core/let
+         [output__7374
+          (predicate-ast
+           (clojure.core/seq
+            (clojure.core/concat
+             (clojure.core/list predicate)
+             (clojure.core/list input-sym))))]
+         (.invoke true-cont__7372 output__7374 nil)))
+       (thunk__7435 input__7371 true-cont__7372 false-cont__7373)))
+     (thunk__7437
+      [input__7371 true-cont__7372 false-cont__7373]
+      (if
+       (clojure.core/instance? java.util.regex.Pattern input__7371)
+       (clojure.core/let
+        [regex input__7371]
+        (clojure.core/let
+         [output__7374 (regex-ast regex)]
+         (.invoke true-cont__7372 output__7374 nil)))
+       (thunk__7436 input__7371 true-cont__7372 false-cont__7373)))
+     (thunk__7443
+      [input__7371 true-cont__7372 false-cont__7373]
+      (if
+       (seq? input__7371)
+       (if
+        (clojure.core/or
+         (clojure.core/instance? clojure.lang.Seqable input__7371)
+         (clojure.core/nil? input__7371))
+        (clojure.core/let
+         [left__7438 (clojure.core/seq input__7371)]
+         (if
+          (clojure.core/not= nil left__7438)
+          (clojure.core/let
+           [left__7439 (clojure.core/first left__7438)]
+           (if
+            (constructor? left__7439)
+            (clojure.core/let
+             [constructor left__7439]
+             (clojure.core/let
+              [left__7440 (clojure.core/next left__7438)]
+              ((.view-fn (zero-or-more pattern))
+               left__7440
+               (clojure.core/fn
+                [output__7441 rest__7442]
+                (clojure.core/let
+                 [arg-patterns output__7441]
+                 (if
+                  (clojure.core/= nil rest__7442)
+                  (clojure.core/let
+                   [output__7374
+                    (constructor-ast
+                     (constructor-name constructor)
+                     arg-patterns)]
+                   (.invoke true-cont__7372 output__7374 nil))
+                  (thunk__7437
+                   input__7371
+                   true-cont__7372
+                   false-cont__7373))))
+               (clojure.core/fn
+                []
+                (thunk__7437
+                 input__7371
+                 true-cont__7372
+                 false-cont__7373)))))
+            (thunk__7437
+             input__7371
+             true-cont__7372
+             false-cont__7373)))
+          (thunk__7437 input__7371 true-cont__7372 false-cont__7373)))
+        (thunk__7437 input__7371 true-cont__7372 false-cont__7373))
+       (thunk__7437 input__7371 true-cont__7372 false-cont__7373)))
+     (thunk__7448
+      [input__7371 true-cont__7372 false-cont__7373]
+      (if
+       (clojure.core/or
+        (clojure.core/instance? clojure.lang.Seqable input__7371)
+        (clojure.core/nil? input__7371))
+       (clojure.core/let
+        [left__7445 (clojure.core/seq input__7371)]
+        ((.view-fn (zero-or-more key&pattern))
+         left__7445
+         (clojure.core/fn
+          [output__7446 rest__7447]
+          (clojure.core/let
+           [keys&patterns output__7446]
+           (if
+            (clojure.core/= nil rest__7447)
+            (clojure.core/let
+             [output__7374 (map-ast keys&patterns)]
+             (.invoke true-cont__7372 output__7374 nil))
+            (thunk__7443
+             input__7371
+             true-cont__7372
+             false-cont__7373))))
+         (clojure.core/fn
+          []
+          (thunk__7443 input__7371 true-cont__7372 false-cont__7373))))
+       (thunk__7443 input__7371 true-cont__7372 false-cont__7373)))
+     (thunk__7449
+      [input__7371 true-cont__7372 false-cont__7373]
+      (if
+       (clojure.core/instance?
+        clojure.lang.PersistentHashMap
+        input__7371)
+       (thunk__7448 input__7371 true-cont__7372 false-cont__7373)
+       (thunk__7443 input__7371 true-cont__7372 false-cont__7373)))
+     (thunk__7450
+      [input__7371 true-cont__7372 false-cont__7373]
+      (if
+       (clojure.core/instance?
+        clojure.lang.PersistentArrayMap
+        input__7371)
+       (thunk__7448 input__7371 true-cont__7372 false-cont__7373)
+       (thunk__7449 input__7371 true-cont__7372 false-cont__7373)))
+     (thunk__7451
+      [input__7371 true-cont__7372 false-cont__7373]
+      (if
+       (class-name? input__7371)
+       (clojure.core/let
+        [class-name input__7371]
+        (clojure.core/let
+         [output__7374 (class-ast class-name)]
+         (.invoke true-cont__7372 output__7374 nil)))
+       (thunk__7450 input__7371 true-cont__7372 false-cont__7373)))
+     (thunk__7452
+      [input__7371 true-cont__7372 false-cont__7373]
+      (if
+       (primitive? input__7371)
+       (clojure.core/let
+        [primitive input__7371]
+        (clojure.core/let
+         [output__7374 (literal-ast primitive)]
+         (.invoke true-cont__7372 output__7374 nil)))
+       (thunk__7451 input__7371 true-cont__7372 false-cont__7373)))
+     (thunk__7453
+      [input__7371 true-cont__7372 false-cont__7373]
+      (if
+       (binding? input__7371)
+       (clojure.core/let
+        [binding input__7371]
+        (clojure.core/let
+         [output__7374 (->Bind (binding-name binding))]
+         (.invoke true-cont__7372 output__7374 nil)))
+       (thunk__7452 input__7371 true-cont__7372 false-cont__7373)))]
+    (strucjure/->View
+     (clojure.core/fn
+      [input__7371 true-cont__7372 false-cont__7373]
+      (if
+       (clojure.core/= '_ input__7371)
+       (clojure.core/let
+        [output__7374 (->Leave nil)]
+        (.invoke true-cont__7372 output__7374 nil))
+       (thunk__7453 input__7371 true-cont__7372 false-cont__7373))))))
+ (def
+  seq-pattern
+  '(clojure.core/letfn
+    [(thunk__7480
+      [input__7474 true-cont__7475 false-cont__7476]
+      ((.view-fn pattern)
+       input__7474
+       (clojure.core/fn
+        [output__7478 rest__7479]
+        (clojure.core/let
+         [pattern output__7478]
+         (clojure.core/let
+          [output__7477 (head-ast pattern)]
+          (.invoke true-cont__7475 output__7477 rest__7479))))
+       (clojure.core/fn [] (.invoke false-cont__7476))))
+     (thunk__7486
+      [input__7474 true-cont__7475 false-cont__7476]
+      (if
+       (seq? input__7474)
+       (if
+        (clojure.core/or
+         (clojure.core/instance? clojure.lang.Seqable input__7474)
+         (clojure.core/nil? input__7474))
+        (clojure.core/let
+         [left__7481 (clojure.core/seq input__7474)]
+         (if
+          (clojure.core/not= nil left__7481)
+          (clojure.core/let
+           [left__7482 (clojure.core/first left__7481)]
+           (if
+            (clojure.core/= 'guard left__7482)
+            (clojure.core/let
+             [left__7483 (clojure.core/next left__7481)]
+             (if
+              (clojure.core/not= nil left__7483)
+              (clojure.core/let
+               [left__7484 (clojure.core/first left__7483)]
+               (clojure.core/let
+                [form left__7484]
+                (clojure.core/let
+                 [left__7485 (clojure.core/next left__7483)]
+                 (if
+                  (clojure.core/= nil left__7485)
+                  (clojure.core/let
+                   [output__7477 (->Guard form)]
+                   (.invoke true-cont__7475 output__7477 nil))
+                  (thunk__7480
+                   input__7474
+                   true-cont__7475
+                   false-cont__7476)))))
+              (thunk__7480
+               input__7474
+               true-cont__7475
+               false-cont__7476)))
+            (thunk__7480
+             input__7474
+             true-cont__7475
+             false-cont__7476)))
+          (thunk__7480 input__7474 true-cont__7475 false-cont__7476)))
+        (thunk__7480 input__7474 true-cont__7475 false-cont__7476))
+       (thunk__7480 input__7474 true-cont__7475 false-cont__7476)))]
+    (strucjure/->View
+     (clojure.core/fn
+      [input__7474 true-cont__7475 false-cont__7476]
+      (if
+       (seq? input__7474)
+       (if
+        (clojure.core/or
+         (clojure.core/instance? clojure.lang.Seqable input__7474)
+         (clojure.core/nil? input__7474))
+        (clojure.core/let
+         [left__7487 (clojure.core/seq input__7474)]
+         (if
+          (clojure.core/not= nil left__7487)
+          (clojure.core/let
+           [left__7488 (clojure.core/first left__7487)]
+           (if
+            (clojure.core/= '& left__7488)
+            (clojure.core/let
+             [left__7489 (clojure.core/next left__7487)]
+             (if
+              (clojure.core/not= nil left__7489)
+              (clojure.core/let
+               [left__7490 (clojure.core/first left__7489)]
+               ((.view-fn pattern)
+                left__7490
+                (clojure.core/fn
+                 [output__7491 rest__7492]
+                 (clojure.core/let
+                  [pattern output__7491]
+                  (if
+                   (clojure.core/= nil rest__7492)
+                   (clojure.core/let
+                    [left__7493 (clojure.core/next left__7489)]
+                    (if
+                     (clojure.core/= nil left__7493)
+                     (clojure.core/let
+                      [output__7477 pattern]
+                      (.invoke true-cont__7475 output__7477 nil))
+                     (thunk__7486
+                      input__7474
+                      true-cont__7475
+                      false-cont__7476)))
+                   (thunk__7486
+                    input__7474
+                    true-cont__7475
+                    false-cont__7476))))
+                (clojure.core/fn
+                 []
+                 (thunk__7486
+                  input__7474
+                  true-cont__7475
+                  false-cont__7476))))
+              (thunk__7486
+               input__7474
+               true-cont__7475
+               false-cont__7476)))
+            (thunk__7486
+             input__7474
+             true-cont__7475
+             false-cont__7476)))
+          (thunk__7486 input__7474 true-cont__7475 false-cont__7476)))
+        (thunk__7486 input__7474 true-cont__7475 false-cont__7476))
+       (thunk__7486 input__7474 true-cont__7475 false-cont__7476)))))))

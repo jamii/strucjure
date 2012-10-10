@@ -240,6 +240,14 @@
    (->Guard predicate)
    (->Leave nil)))
 
+(defn constructor-ast [constructor arg-patterns]
+  (and-ast
+   (class-ast constructor)
+   (seq-ast
+    (->Leave `(vals ~input-sym))
+    (apply seqable-ast
+           (map head-ast arg-patterns)))))
+
 ;; VIEWS
 
 (defn succeed [output rest]
@@ -270,13 +278,19 @@
 
 (defn binding? [value]
   (and (symbol? value)
-       (.startsWith (name value) "?")
-       (> (count (name value)) 1)))
+       (re-find #"\?(.+)" (name value))))
 
 (defn binding-name [value]
-  (let [var-name (name value)
-        name-rest (.substring var-name 1 (.length var-name))]
-    (symbol name-rest)))
+  (let [[_ string] (re-find #"\?(.+)" (name value))]
+    (symbol string)))
+
+(defn constructor? [value]
+  (and (symbol? value)
+       (re-find #"(.+)\." (name value))))
+
+(defn constructor-name [value]
+  (let [[_ string] (re-find #"(.+)\." (name value))]
+    (symbol string)))
 
 (defn class-name? [value]
   (and (symbol? value)
@@ -382,8 +396,10 @@
       ;; LITERALS
       (and primitive? ?primitive) (literal-ast primitive) ; primitives evaluate to themselves, so don't need quoting
       (and class-name? ?class-name) (class-ast class-name)
-      (and (or clojure.lang.PersistentArrayMap clojure.lang.PersistentHashMap)
-           [(& ((zero-or-more key&pattern) ?keys&patterns))]) (map-ast keys&patterns)
+      (and (or clojure.lang.PersistentArrayMap clojure.lang.PersistentHashMap) [(& ((zero-or-more key&pattern) ?keys&patterns))]) (map-ast keys&patterns)
+      (and seq? [(and constructor? ?constructor) (& ((zero-or-more pattern) ?arg-patterns))]) (constructor-ast (constructor-name constructor) arg-patterns)
+
+      ;; PREDICATES
       (and java.util.regex.Pattern ?regex) (regex-ast regex)
       (and predicate? ?predicate) (predicate-ast `(~predicate ~input-sym))
       (and seq? [(or 'fn 'fn*) [?arg] (& ?body)]) (predicate-ast `(do ~@(clojure.walk/prewalk-replace {arg input-sym} body)))

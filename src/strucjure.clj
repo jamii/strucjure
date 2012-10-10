@@ -16,9 +16,10 @@
 ;; TODO
 ;; fix view indentation in emacs
 ;; better error/failure reporting
-;; provide syntax for matching records, predicates
+;; provide syntax for matching record literals #user.Foo{}
 ;; allow optional keys?
 ;; think about extensibility and memoization
+;; consider using (! view pattern) for imports, and (&! view pattern) -> (& (! view pattern))
 
 ;; UTILS FOR CODEGEN
 

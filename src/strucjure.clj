@@ -234,6 +234,11 @@
    (->Guard `(not= nil (re-find ~regex ~input-sym)))
    (->Leave nil)))
 
+(defn predicate-ast [predicate]
+  (and-ast
+   (->Guard `(~predicate ~input-sym))
+   (->Leave nil)))
+
 ;; VIEWS
 
 (defn succeed [output rest]
@@ -264,7 +269,7 @@
 
 (defn binding? [value]
   (and (symbol? value)
-       (= \? (.charAt (name value) 0))
+       (.startsWith (name value) "?")
        (> (count (name value)) 1)))
 
 (defn binding-name [value]
@@ -275,6 +280,10 @@
 (defn class-name? [value]
   (and (symbol? value)
        (re-find #"\A(?:[a-z0-9\-]+\.)*[A-Z]\w*\Z" (name value))))
+
+(defn predicate? [value]
+  (and (symbol? value)
+       (.endsWith (name value) "?")))
 
 (def optional (eval strucjure.bootstrap/optional))
 (def zero-or-more (eval strucjure.bootstrap/zero-or-more))
@@ -381,6 +390,9 @@
            (and (or clojure.lang.PersistentArrayMap clojure.lang.PersistentHashMap)
                 [(& ((zero-or-more key&pattern) ?keys&patterns))]) (map-ast keys&patterns)
            (and java.util.regex.Pattern ?regex) (regex-ast regex)
+           (and (or (guard (predicate? ?))
+                    (and (guard (seq? ?)) [(or 'fn 'fn*) (& _)]))
+                ?predicate) (predicate-ast predicate)
 
            ;; SEQUENCES
            (and (guard (vector? ?)) [(& ((zero-or-more seq-pattern) ?seq-patterns))]) (seqable-ast seq-patterns)

@@ -236,7 +236,7 @@
 
 (defn predicate-ast [predicate]
   (and-ast
-   (->Guard `(~predicate ~input-sym))
+   (->Guard predicate)
    (->Leave nil)))
 
 ;; VIEWS
@@ -358,69 +358,72 @@
 
 ;; BOOTSTRAPPING
 
-(defview quote-def
-  ['def ?name ?value] `(def ~name '~value))
+(def parser
+  ['(defnview optional [elem]
+      (and [(elem ?x) (& ?rest)] (leave rest)) x
+      (and [(& ?rest)] (leave rest)) nil)
+
+   '(defnview zero-or-more [elem]
+      (and [(elem ?x) (& ((zero-or-more elem) ?xs)) (& ?rest)] (leave rest)) (cons x xs)
+      (and [(& ?rest)] (leave rest)) nil)
+
+   '(defnview one-or-more [elem]
+      (and [(elem ?x) (& ((zero-or-more elem) ?xs)) (& ?rest)] (leave rest)) (cons x xs))
+
+   '(defview key&pattern
+      [?key (pattern ?pattern)] [key pattern])
+
+   '(defview pattern
+      ;; BINDINGS
+      '_ (->Leave nil)
+      (and (guard (binding? %)) ?binding) (->Bind (binding-name binding))
+
+      ;; LITERALS
+      (and (guard (primitive? %)) ?literal) (literal-ast literal) ; primitives evaluate to themselves, so don't need quoting
+      (and (guard (class-name? %)) ?class-name) (class-ast class-name)
+      (and (or clojure.lang.PersistentArrayMap clojure.lang.PersistentHashMap)
+           [(& ((zero-or-more key&pattern) ?keys&patterns))]) (map-ast keys&patterns)
+      (and java.util.regex.Pattern ?regex) (regex-ast regex)
+      (and predicate? ?predicate) (predicate-ast `(~predicate ~input-sym))
+      (and seq? [(or 'fn 'fn*) [?arg] (& ?body)]) (predicate-ast `(do ~@(clojure.walk/prewalk-replace {arg input-sym} body)))
+
+      ;; SEQUENCES
+      (and (guard (vector? %)) [(& ((zero-or-more seq-pattern) ?seq-patterns))]) (seqable-ast seq-patterns)
+
+      ;; SPECIAL FORMS
+      (and (guard (seq? %)) ['quote ?quoted]) (literal-ast `(quote ~quoted))
+      (and (guard (seq? %)) ['guard ?form]) (->Guard form)
+      (and (guard (seq? %)) ['leave ?form]) (->Leave form)
+      (and (guard (seq? %)) ['and (& ((one-or-more pattern) ?patterns))]) (apply and-ast patterns)
+      (and (guard (seq? %)) ['seq (& ((one-or-more pattern) ?patterns))]) (apply seq-ast patterns)
+      (and (guard (seq? %)) ['or (& ((one-or-more pattern) ?patterns))]) (apply or-ast patterns)
+
+      ;; EXTERNAL VARIABLES
+      (and (guard (symbol? %)) ?variable) (literal-ast variable)
+
+      ;; IMPORTED VIEWS
+      ;; (and (guard (seq? %)) ['? %predicate (pattern ?pattern)]) (predicate-ast predicate pattern)
+      (and (guard (seq? %)) [?view (pattern ?pattern)]) (import-ast view pattern))
+
+   '(defview seq-pattern
+      ;; & PATTERNS
+      (and (guard (seq? %)) ['& (pattern ?pattern)]) pattern
+
+      ;; ESCAPED PATTERNS
+      (and (guard (seq? %)) ['guard ?form]) (->Guard form)
+
+      ;; ALL OTHER PATTERNS
+      (pattern ?pattern) (head-ast pattern))])
+
+(defn defview->clj [quoted-defview]
+  (match (macroexpand-1 quoted-defview)
+         ['def ?name ?value] `(def ~name '~value)))
 
 (defn bootstrap []
-  (map (fn [definition] (quote-def (macroexpand-1 definition)))
-       (list
-
-        '(defnview optional [elem]
-           (and [(elem ?x) (& ?rest)] (leave rest)) x
-           (and [(& ?rest)] (leave rest)) nil)
-
-        '(defnview zero-or-more [elem]
-           (and [(elem ?x) (& ((zero-or-more elem) ?xs)) (& ?rest)] (leave rest)) (cons x xs)
-           (and [(& ?rest)] (leave rest)) nil)
-
-        '(defnview one-or-more [elem]
-           (and [(elem ?x) (& ((zero-or-more elem) ?xs)) (& ?rest)] (leave rest)) (cons x xs))
-
-        '(defview key&pattern
-           [?key (pattern ?pattern)] [key pattern])
-
-        '(defview pattern
-           ;; BINDINGS
-           '_ (->Leave nil)
-           (and (guard (binding? %)) ?binding) (->Bind (binding-name binding))
-
-           ;; LITERALS
-           (and (guard (primitive? %)) ?literal) (literal-ast literal) ; primitives evaluate to themselves, so don't need quoting
-           (and (guard (class-name? %)) ?class-name) (class-ast class-name)
-           (and (or clojure.lang.PersistentArrayMap clojure.lang.PersistentHashMap)
-                [(& ((zero-or-more key&pattern) ?keys&patterns))]) (map-ast keys&patterns)
-           (and java.util.regex.Pattern ?regex) (regex-ast regex)
-           (and (or (guard (predicate? %))
-                    (and (guard (seq? %)) [(or 'fn 'fn*) (& _)]))
-                ?predicate) (predicate-ast predicate)
-
-           ;; SEQUENCES
-           (and (guard (vector? %)) [(& ((zero-or-more seq-pattern) ?seq-patterns))]) (seqable-ast seq-patterns)
-
-           ;; SPECIAL FORMS
-           (and (guard (seq? %)) ['quote ?quoted]) (literal-ast `(quote ~quoted))
-           (and (guard (seq? %)) ['guard ?form]) (->Guard form)
-           (and (guard (seq? %)) ['leave ?form]) (->Leave form)
-           (and (guard (seq? %)) ['and (& ((one-or-more pattern) ?patterns))]) (apply and-ast patterns)
-           (and (guard (seq? %)) ['seq (& ((one-or-more pattern) ?patterns))]) (apply seq-ast patterns)
-           (and (guard (seq? %)) ['or (& ((one-or-more pattern) ?patterns))]) (apply or-ast patterns)
-
-           ;; EXTERNAL VARIABLES
-           (and (guard (symbol? %)) ?variable) (literal-ast variable)
-
-           ;; IMPORTED VIEWS
-           ;; (and (guard (seq? %)) ['? %predicate (pattern ?pattern)]) (predicate-ast predicate pattern)
-           (and (guard (seq? %)) [?view (pattern ?pattern)]) (import-ast view pattern))
-
-        '(defview seq-pattern
-           ;; & PATTERNS
-           (and (guard (seq? %)) ['& (pattern ?pattern)]) pattern
-
-           ;; ESCAPED PATTERNS
-           (and (guard (seq? %)) ['guard ?form]) (->Guard form)
-
-           ;; ALL OTHER PATTERNS
-           (pattern ?pattern) (head-ast pattern)))))
+  (spit "src/strucjure/bootstrap.clj"
+        (pr-str
+         '(ns strucjure.bootstrap)
+         `(do ~@(map defview->clj parser)))))
 
 ;; TESTS
 

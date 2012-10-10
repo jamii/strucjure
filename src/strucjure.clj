@@ -211,7 +211,7 @@
 (defn seqable-ast [& patterns]
   (apply seq-ast
    (flatten
-    [(->Guard '(or (instance? clojure.lang.Seqable %) (nil? %)))
+    [(->Guard `(or (instance? clojure.lang.Seqable ~input-sym) (nil? ~input-sym)))
      (->Leave `(seq ~input-sym))
      patterns
      (->GuardNil)])))

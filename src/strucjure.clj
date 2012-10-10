@@ -322,6 +322,7 @@
   (assert (even? (count patterns&values)))
   (let [output (gensym "output__")
         thunks (atom [])
+        bindings (conj bindings input)
         start (reduce
                (fn [false-branch [pattern value]]
                  (ast->clj pattern input bindings thunks
@@ -339,7 +340,7 @@
   (let [input (gensym "input__")
         true-cont (gensym "true-cont__")
         false-cont (gensym "false-cont__")
-        bindings (conj bindings input true-cont false-cont)
+        bindings (conj bindings true-cont false-cont)
         true-case (fn [output rest] (->Thunk '.invoke [true-cont output rest]))
         false-case (->Thunk '.invoke [false-cont])
         wrapper (fn [start] (wrapper `(->View (fn [~input ~true-cont ~false-cont] ~start))))]
@@ -357,19 +358,20 @@
 (def fail-inline
   `(throw+ ::no-matching-pattern))
 
-(defmacro match [input & patterns&values]
-  (compile-inline (parse patterns&values) input [] succeed-inline fail-inline identity))
+(defmacro match [value & patterns&values]
+  (let [input (gensym "input__")]
+    (compile-inline (parse patterns&values) input #{} succeed-inline fail-inline (fn [start] `(let [~input ~value] ~start)))))
 
 (defmacro view [& patterns&values]
-  (compile-view (parse patterns&values) [] identity))
+  (compile-view (parse patterns&values) #{} identity))
 
 (defmacro defview [name & patterns&values]
   `(def ~name
-     ~(compile-view (parse patterns&values) [] identity)))
+     ~(compile-view (parse patterns&values) #{} identity)))
 
 (defmacro defnview [name args & patterns&values]
   `(def ~name
-     ~(compile-view (parse patterns&values) args (fn [start] `(fn [~@args] ~start)))))
+     ~(compile-view (parse patterns&values) (set args) (fn [start] `(fn [~@args] ~start)))))
 
 ;; BOOTSTRAPPING
 

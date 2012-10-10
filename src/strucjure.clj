@@ -15,7 +15,7 @@
 ;; TODO
 ;; fix match indentation in emacs
 ;; better error/failure reporting
-;; provide syntax for matching records, regexes
+;; provide syntax for matching records, predicates
 ;; allow optional keys?
 ;; think about extensibility and memoization
 
@@ -229,6 +229,11 @@
          (for [[key pattern] keys&patterns]
            (key-ast key pattern))))
 
+(defn regex-ast [regex]
+  (and-ast
+   (->Guard `(not= nil (re-find ~regex ~input-sym)))
+   (->Leave nil)))
+
 ;; MATCHES
 
 (defn succeed [output rest]
@@ -362,6 +367,7 @@
            (and (guard (class-name? %)) ?class-name) (class-ast class-name)
            (and (or clojure.lang.PersistentArrayMap clojure.lang.PersistentHashMap)
                 [(& ((zero-or-more key&pattern) ?keys&patterns))]) (map-ast keys&patterns)
+           (and java.util.regex.Pattern ?regex) (regex-ast regex)
 
            ;; SEQUENCES
            (and (guard (vector? %)) [(& ((zero-or-more seq-pattern) ?seq-patterns))]) (seqable-ast seq-patterns)

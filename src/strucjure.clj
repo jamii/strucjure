@@ -211,13 +211,17 @@
   (seq-ast (->Guard `(instance? ~class-name ~input-sym))
            (->Leave nil)))
 
-(defn seqable-ast [& patterns]
+(defn prefix-ast [& patterns]
   (apply seq-ast
    (flatten
     [(->Guard `(or (instance? clojure.lang.Seqable ~input-sym) (nil? ~input-sym)))
      (->Leave `(seq ~input-sym))
-     patterns
-     (->GuardNil)])))
+     (into [] patterns)])))
+
+(defn seqable-ast [& patterns]
+  (seq-ast
+   (apply prefix-ast patterns)
+   (->GuardNil)))
 
 (defn key-ast [key pattern]
   (seq-ast
@@ -407,7 +411,8 @@
       (and seq? [(or 'fn 'fn*) [?arg] (& ?body)]) (predicate-ast `(do ~@(clojure.walk/prewalk-replace {arg input-sym} body)))
 
       ;; SEQUENCES
-      (and vector? [(& ((zero-or-more seq-pattern) ?seq-patterns))]) (seqable-ast seq-patterns)
+      (and vector? [(& ((zero-or-more seq-pattern) ?seq-patterns))]) (apply seqable-ast seq-patterns)
+      (and seq? ['prefix (& ((zero-or-more seq-pattern) ?seq-patterns))]) (apply prefix-ast seq-patterns)
 
       ;; SPECIAL FORMS
       (and seq? ['quote ?quoted]) (literal-ast `(quote ~quoted))
@@ -421,7 +426,6 @@
       (and symbol? ?variable) (literal-ast variable)
 
       ;; IMPORTED VIEWS
-      ;; (and seq? ['? %predicate (pattern ?pattern)]) (predicate-ast predicate pattern)
       (and seq? [?view (pattern ?pattern)]) (import-ast view pattern))
 
    '(defview seq-pattern

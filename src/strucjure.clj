@@ -381,15 +381,15 @@
 
 (def parser
   ['(defnview optional [elem]
-      (and [(elem ?x) (& ?rest)] (leave rest)) x
-      (and [(& ?rest)] (leave rest)) nil)
+      (prefix (elem ?x)) x
+      (prefix) nil)
 
    '(defnview zero-or-more [elem]
-      (and [(elem ?x) (& ((zero-or-more elem) ?xs)) (& ?rest)] (leave rest)) (cons x xs)
-      (and [(& ?rest)] (leave rest)) nil)
+      (prefix (elem ?x) (& ((zero-or-more elem) ?xs))) (cons x xs)
+      (prefix) nil)
 
    '(defnview one-or-more [elem]
-      (and [(elem ?x) (& ((zero-or-more elem) ?xs)) (& ?rest)] (leave rest)) (cons x xs))
+      (prefix (elem ?x) (& ((zero-or-more elem) ?xs))) (cons x xs))
 
    '(defview key&pattern
       [?key (pattern ?pattern)] [key pattern])

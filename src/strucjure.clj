@@ -182,6 +182,16 @@
       (ast->clj pattern-a input bindings thunks true-case
                 (ast->clj pattern-b input bindings thunks true-case false-case)))))
 
+;; Fails if the inner pattern succeeds and vice versa
+;; No bindings are exported (TODO: allow exporting not-bindings)
+;; The input is consumed
+(defrecord Not [pattern]
+  Ast
+  (ast->clj* [this input bindings thunks true-case false-case]
+    (ast->clj pattern input bindings thunks
+              (fn [_ _] false-case)
+              (true-case nil bindings))))
+
 ;; HIGH-LEVEL AST
 
 (defn and-ast [& patterns]
@@ -421,6 +431,7 @@
       (and seq? ['and (& ((one-or-more pattern) ?patterns))]) (apply and-ast patterns)
       (and seq? ['seq (& ((one-or-more pattern) ?patterns))]) (apply seq-ast patterns)
       (and seq? ['or (& ((one-or-more pattern) ?patterns))]) (apply or-ast patterns)
+      (and seq? ['not (pattern ?pattern)]) (->Not pattern)
 
       ;; EXTERNAL VARIABLES
       (and symbol? ?variable) (literal-ast variable)

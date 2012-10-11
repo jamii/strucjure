@@ -328,9 +328,7 @@
         start (reduce
                (fn [false-branch [pattern value]]
                  (ast->clj pattern input bindings thunks
-                           (fn [rest _]
-                             `(let [~output ~value]
-                                ~(true-case output rest)))
+                           (fn [rest _] (true-case value rest))
                            false-branch))
                false-case
                (reverse (partition 2 patterns&values)))]

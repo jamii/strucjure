@@ -20,6 +20,7 @@
 ;; allow optional keys?
 ;; think about extensibility and memoization
 ;; consider using (! view pattern) for imports, and (&! view pattern) -> (& (! view pattern))
+;; if make view a protocol, can do things like (regex pattern) for free
 
 ;; UTILS FOR CODEGEN
 
@@ -279,23 +280,23 @@
 
 (defn binding? [value]
   (and (symbol? value)
-       (re-find #"\?(.+)" (name value))))
+       (re-find #"^\?(.+)$" (name value))))
 
 (defn binding-name [value]
-  (let [[_ string] (re-find #"\?(.+)" (name value))]
+  (let [[_ string] (re-find #"^\?(.+)$" (name value))]
     (symbol string)))
 
 (defn constructor? [value]
   (and (symbol? value)
-       (re-find #"(.+)\." (name value))))
+       (re-find #"^(.+)\.$" (name value))))
 
 (defn constructor-name [value]
-  (let [[_ string] (re-find #"(.+)\." (name value))]
+  (let [[_ string] (re-find #"^(.+)\.$" (name value))]
     (symbol string)))
 
 (defn class-name? [value]
   (and (symbol? value)
-       (re-find #"\A(?:[a-z0-9\-]+\.)*[A-Z]\w*\Z" (name value))))
+       (re-find #"^\A(?:[a-z0-9\-]+\.)*[A-Z]\w*\Z$" (name value))))
 
 (defn predicate? [value]
   (and (symbol? value)

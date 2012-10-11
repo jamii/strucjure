@@ -418,6 +418,7 @@
       ;; PREDICATES
       (and java.util.regex.Pattern ?regex) (regex-ast regex)
       (and predicate? ?predicate) (predicate-ast `(~predicate ~input-sym))
+      (and seq? [(or 'fn 'fn*) [] (& ?body)]) (predicate-ast `(do ~@body))
       (and seq? [(or 'fn 'fn*) [?arg] (& ?body)]) (predicate-ast `(do ~@(clojure.walk/prewalk-replace {arg input-sym} body)))
 
       ;; SEQUENCES

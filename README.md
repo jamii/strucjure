@@ -4,7 +4,9 @@ Leiningen couldn't handle the irony.
 
 ## Installation
 
-No clojar yet :(
+```
+[strucjure "0.1.0"]
+```
 
 ```clojure
 :use [strucjure :only [match view defview defnview]]

@@ -319,6 +319,8 @@
 (def optional (eval strucjure.bootstrap/optional))
 (def zero-or-more (eval strucjure.bootstrap/zero-or-more))
 (def one-or-more (eval strucjure.bootstrap/one-or-more))
+(def zero-or-more-prefix (eval strucjure.bootstrap/zero-or-more-prefix))
+(def one-or-more-prefix (eval strucjure.bootstrap/one-or-more-prefix))
 (declare pattern)
 (declare seq-pattern)
 (def key&pattern (eval strucjure.bootstrap/key&pattern))
@@ -395,11 +397,18 @@
       (prefix) nil)
 
    '(defnview zero-or-more [elem]
-      (prefix (elem ?x) (& ((zero-or-more elem) ?xs))) (cons x xs)
+      (prefix (elem ?x) & ((zero-or-more elem) ?xs)) (cons x xs)
       (prefix) nil)
 
    '(defnview one-or-more [elem]
-      (prefix (elem ?x) (& ((zero-or-more elem) ?xs))) (cons x xs))
+      (prefix (elem ?x) & ((zero-or-more elem) ?xs)) (cons x xs))
+
+   '(defnview zero-or-more-prefix [elem]
+      (prefix & (elem ?x) & ((zero-or-more-prefix elem) ?xs)) (cons x xs)
+      (prefix) nil)
+
+   '(defnview one-or-more-prefix [elem]
+      (prefix & (elem ?x) & ((zero-or-more-prefix elem) ?xs)) (cons x xs))
 
    '(defview key&pattern
       [?key (pattern ?pattern)] [key pattern])
@@ -412,26 +421,26 @@
       ;; LITERALS
       (and primitive? ?primitive) (literal-ast primitive) ; primitives evaluate to themselves, so don't need quoting
       (and class-name? ?class-name) (class-ast class-name)
-      (and (or clojure.lang.PersistentArrayMap clojure.lang.PersistentHashMap) [(& ((zero-or-more key&pattern) ?keys&patterns))]) (map-ast keys&patterns)
-      (and seq? [(and constructor? ?constructor) (& ((zero-or-more pattern) ?arg-patterns))]) (constructor-ast (constructor-name constructor) arg-patterns)
+      (and (or clojure.lang.PersistentArrayMap clojure.lang.PersistentHashMap) [& ((zero-or-more key&pattern) ?keys&patterns)]) (map-ast keys&patterns)
+      (and seq? [(and constructor? ?constructor) & ((zero-or-more pattern) ?arg-patterns)]) (constructor-ast (constructor-name constructor) arg-patterns)
 
       ;; PREDICATES
       (and java.util.regex.Pattern ?regex) (regex-ast regex)
       (and predicate? ?predicate) (predicate-ast `(~predicate ~input-sym))
-      (and seq? [(or 'fn 'fn*) [] (& ?body)]) (predicate-ast `(do ~@body))
-      (and seq? [(or 'fn 'fn*) [?arg] (& ?body)]) (predicate-ast `(do ~@(clojure.walk/prewalk-replace {arg input-sym} body)))
+      (and seq? [(or 'fn 'fn*) [] & ?body]) (predicate-ast `(do ~@body))
+      (and seq? [(or 'fn 'fn*) [?arg] & ?body]) (predicate-ast `(do ~@(clojure.walk/prewalk-replace {arg input-sym} body)))
 
       ;; SEQUENCES
-      (and vector? [(& ((zero-or-more seq-pattern) ?seq-patterns))]) (apply seqable-ast seq-patterns)
-      (and seq? ['prefix (& ((zero-or-more seq-pattern) ?seq-patterns))]) (apply prefix-ast seq-patterns)
+      (and vector? [& ((zero-or-more-prefix seq-pattern) ?seq-patterns)]) (apply seqable-ast seq-patterns)
+      (and seq? ['prefix & ((zero-or-more-prefix seq-pattern) ?seq-patterns)]) (apply prefix-ast seq-patterns)
 
       ;; SPECIAL FORMS
       (and seq? ['quote ?quoted]) (literal-ast `(quote ~quoted))
       (and seq? ['guard ?form]) (->Guard form)
       (and seq? ['leave ?form]) (->Leave form)
-      (and seq? ['and (& ((one-or-more pattern) ?patterns))]) (apply and-ast patterns)
-      (and seq? ['seq (& ((one-or-more pattern) ?patterns))]) (apply seq-ast patterns)
-      (and seq? ['or (& ((one-or-more pattern) ?patterns))]) (apply or-ast patterns)
+      (and seq? ['and & ((one-or-more pattern) ?patterns)]) (apply and-ast patterns)
+      (and seq? ['seq & ((one-or-more pattern) ?patterns)]) (apply seq-ast patterns)
+      (and seq? ['or & ((one-or-more pattern) ?patterns)]) (apply or-ast patterns)
       (and seq? ['not (pattern ?pattern)]) (->Not pattern)
 
       ;; EXTERNAL VARIABLES
@@ -442,13 +451,13 @@
 
    '(defview seq-pattern
       ;; & PATTERNS
-      (and seq? ['& (pattern ?pattern)]) pattern
+      (prefix '& (pattern ?pattern)) pattern
 
       ;; ESCAPED PATTERNS
-      (and seq? ['guard ?form]) (->Guard form)
+      (prefix (and seq? ['guard ?form])) (->Guard form)
 
       ;; ALL OTHER PATTERNS
-      (pattern ?pattern) (head-ast pattern))])
+      (prefix (pattern ?pattern)) (head-ast pattern))])
 
 (defn defview->clj [quoted-defview]
   (match (macroexpand-1 quoted-defview)

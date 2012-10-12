@@ -193,11 +193,11 @@ user> (match [1 2 3]
 3
 ```
 
-Inside a vector you can use (& ...) to apply a pattern to the rest of the sequence, rather than to the next element.
+Inside a vector you can use '& pattern' to apply a pattern to the rest of the sequence, rather than to the next element.
 
 ```clojure
 user> (match [1 2 3]
-             [1 (& #(> (count %) 1))] 'yup)
+             [1 & #(> (count %) 1)] 'yup)
 yup
 ```
 
@@ -229,7 +229,7 @@ Any other function call should be of the form (view pattern). This calls an exte
 
 ```clojure
 user> (defnview zero-or-more [elem]
-        (prefix (elem ?x) (& ((zero-or-more elem) ?xs))) (cons x xs)
+        (prefix (elem ?x) & ((zero-or-more elem) ?xs)) (cons x xs)
         (prefix) nil)
 #'user/zero-or-more
 user> (defview one
@@ -239,7 +239,7 @@ user> (defview two
         2 'two)
 #'user/two
 user> (match [1 1 1 1 2 2]
-             [(& ((zero-or-more one) ?ones)) (& ((zero-or-more two) ?twos))] [(count ones) (count twos)])
+             [& ((zero-or-more one) ?ones) & ((zero-or-more two) ?twos)] [(count ones) (count twos)])
 [4 2]
 ```
 
@@ -295,14 +295,14 @@ A recursive descent parser with operator precedence:
   (prefix (and (not reserved?) ?n)) n)
 
 (defview arith-mult-div
-  (prefix (& (arith-value ?x)) '* (& (arith-mult-div ?y))) `(~'* ~x ~y)
-  (prefix (& (arith-value ?x)) '/ (& (arith-mult-div ?y))) `(~'/ ~x ~y)
-  (prefix (& (arith-value ?x))) x)
+  (prefix & (arith-value ?x) '* & (arith-mult-div ?y)) `(~'* ~x ~y)
+  (prefix & (arith-value ?x) '/ & (arith-mult-div ?y)) `(~'/ ~x ~y)
+  (prefix & (arith-value ?x)) x)
 
 (defview arith-plus-minus
-  (prefix (& (arith-mult-div ?x)) '+ (& (arith-plus-minus ?y))) `(~'+ ~x ~y)
-  (prefix (& (arith-mult-div ?x)) '- (& (arith-plus-minus ?y))) `(~'- ~x ~y)
-  (prefix (& (arith-mult-div ?x))) x)
+  (prefix & (arith-mult-div ?x) '+ & (arith-plus-minus ?y)) `(~'+ ~x ~y)
+  (prefix & (arith-mult-div ?x) '- & (arith-plus-minus ?y)) `(~'- ~x ~y)
+  (prefix & (arith-mult-div ?x)) x)
 
 (defmacro arith [& tokens]
   (arith-plus-minus tokens))
@@ -321,11 +321,18 @@ The syntax of strucjure itself is self-defined using views.
   (prefix) nil)
 
 (defnview zero-or-more [elem]
-  (prefix (elem ?x) (& ((zero-or-more elem) ?xs))) (cons x xs)
+  (prefix (elem ?x) & ((zero-or-more elem) ?xs)) (cons x xs)
   (prefix) nil)
 
 (defnview one-or-more [elem]
-  (prefix (elem ?x) (& ((zero-or-more elem) ?xs))) (cons x xs))
+  (prefix (elem ?x) & ((zero-or-more elem) ?xs)) (cons x xs))
+
+(defnview zero-or-more-prefix [elem]
+  (prefix & (elem ?x) & ((zero-or-more-prefix elem) ?xs)) (cons x xs)
+  (prefix) nil)
+
+(defnview one-or-more-prefix [elem]
+  (prefix & (elem ?x) & ((zero-or-more-prefix elem) ?xs)) (cons x xs))
 
 (defview key&pattern
   [?key (pattern ?pattern)] [key pattern])
@@ -338,26 +345,26 @@ The syntax of strucjure itself is self-defined using views.
   ;; LITERALS
   (and primitive? ?primitive) (literal-ast primitive) ; primitives evaluate to themselves, so don't need quoting
   (and class-name? ?class-name) (class-ast class-name)
-  (and (or clojure.lang.PersistentArrayMap clojure.lang.PersistentHashMap) [(& ((zero-or-more key&pattern) ?keys&patterns))]) (map-ast keys&patterns)
-  (and seq? [(and constructor? ?constructor) (& ((zero-or-more pattern) ?arg-patterns))]) (constructor-ast (constructor-name constructor) arg-patterns)
+  (and (or clojure.lang.PersistentArrayMap clojure.lang.PersistentHashMap) [& ((zero-or-more key&pattern) ?keys&patterns)]) (map-ast keys&patterns)
+  (and seq? [(and constructor? ?constructor) & ((zero-or-more pattern) ?arg-patterns)]) (constructor-ast (constructor-name constructor) arg-patterns)
 
   ;; PREDICATES
   (and java.util.regex.Pattern ?regex) (regex-ast regex)
   (and predicate? ?predicate) (predicate-ast `(~predicate ~input-sym))
-  (and seq? [(or 'fn 'fn*) [] (& ?body)]) (predicate-ast `(do ~@body))
-  (and seq? [(or 'fn 'fn*) [?arg] (& ?body)]) (predicate-ast `(do ~@(clojure.walk/prewalk-replace {arg input-sym} body)))
+  (and seq? [(or 'fn 'fn*) [] & ?body]) (predicate-ast `(do ~@body))
+  (and seq? [(or 'fn 'fn*) [?arg] & ?body]) (predicate-ast `(do ~@(clojure.walk/prewalk-replace {arg input-sym} body)))
 
   ;; SEQUENCES
-  (and vector? [(& ((zero-or-more seq-pattern) ?seq-patterns))]) (apply seqable-ast seq-patterns)
-  (and seq? ['prefix (& ((zero-or-more seq-pattern) ?seq-patterns))]) (apply prefix-ast seq-patterns)
+  (and vector? [& ((zero-or-more-prefix seq-pattern) ?seq-patterns)]) (apply seqable-ast seq-patterns)
+  (and seq? ['prefix & ((zero-or-more-prefix seq-pattern) ?seq-patterns)]) (apply prefix-ast seq-patterns)
 
   ;; SPECIAL FORMS
   (and seq? ['quote ?quoted]) (literal-ast `(quote ~quoted))
   (and seq? ['guard ?form]) (->Guard form)
   (and seq? ['leave ?form]) (->Leave form)
-  (and seq? ['and (& ((one-or-more pattern) ?patterns))]) (apply and-ast patterns)
-  (and seq? ['seq (& ((one-or-more pattern) ?patterns))]) (apply seq-ast patterns)
-  (and seq? ['or (& ((one-or-more pattern) ?patterns))]) (apply or-ast patterns)
+  (and seq? ['and & ((one-or-more pattern) ?patterns)]) (apply and-ast patterns)
+  (and seq? ['seq & ((one-or-more pattern) ?patterns)]) (apply seq-ast patterns)
+  (and seq? ['or & ((one-or-more pattern) ?patterns)]) (apply or-ast patterns)
   (and seq? ['not (pattern ?pattern)]) (->Not pattern)
 
   ;; EXTERNAL VARIABLES
@@ -368,13 +375,13 @@ The syntax of strucjure itself is self-defined using views.
 
 (defview seq-pattern
   ;; & PATTERNS
-  (and seq? ['& (pattern ?pattern)]) pattern
+  (prefix '& (pattern ?pattern)) pattern
 
   ;; ESCAPED PATTERNS
-  (and seq? ['guard ?form]) (->Guard form)
+  (prefix (and seq? ['guard ?form])) (->Guard form)
 
   ;; ALL OTHER PATTERNS
-  (pattern ?pattern) (head-ast pattern))
+  (prefix (pattern ?pattern)) (head-ast pattern)))
 ```
 
 ## License

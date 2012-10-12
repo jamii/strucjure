@@ -14,13 +14,13 @@
 ;; A view is constructed from a list of [pattern value] pairs, where the value forms have access to the patterns bindings
 
 ;; TODO
-;; fix view indentation in emacs
 ;; better error/failure reporting
-;; provide syntax for matching record literals #user.Foo{}
+;; provide syntax for matching record literals #user.Foo{} and set literals
 ;; allow optional keys?
 ;; think about extensibility and memoization
-;; consider using (! view pattern) for imports, and (&! view pattern) -> (& (! view pattern))
-;; if make view a protocol, can do things like (regex pattern) for free
+;; use & pattern instead of (& pattern)
+;; if make view a protocol, can do things like (regex pattern) for free but lose IFn on compiled views
+;; separate into pattern level (ie *-ast) and code level ASTs
 
 ;; UTILS FOR CODEGEN
 

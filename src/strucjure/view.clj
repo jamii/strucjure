@@ -98,5 +98,3 @@
              (extending [extendable [#"foo" extendable #"bartender"]]
                         (is (= "foo" (run extendable "foo")))
                         (is (= "bar" (run extendable "bar"))))))
-
-(run-tests)

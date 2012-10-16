@@ -63,8 +63,17 @@
                (:views view)
                view)))))
 
-(defmacro extend [view-var & views]
-  `(alter-var-root (var ~view-var) (case ~@views)))
+(defn extend* [view-var & views]
+  (alter-var-root view-var (apply case views)))
+
+(defmacro extend [view & views]
+  `(extend* (var ~view) ~@views))
+
+(defmacro post-extend [view & views]
+  `(extend view view ~@views))
+
+(defmacro pre-extend [view & views]
+  `(extend view ~@views view))
 
 (defmacro extending [extensions & body]
   (assert (even? (count extensions)))

@@ -19,12 +19,18 @@
     (throw+ (PartialMatch. view input output rest))))
 
 (defn run
-  ([this input] (run* this input (partial succeed view input) (partial fail view input)))
-  ([this input true-case] (run* this input true-case (partial fail view input)))
+  ([this input] (run* this input (partial succeed this input) (partial fail this input)))
+  ([this input true-case] (run* this input true-case (partial fail this input)))
   ([this input true-case false-case] (run* this input true-case false-case)))
+
+(defn matches? [this input]
+  (run* this input (fn [_ _] true) (fn [] false)))
 
 (defn replace [view input]
   (run* view input (fn [output _] output) (fn [] input)))
+
+(defn expand [view input]
+  (run* view input (fn [output _] (expand view output)) (fn [] input)))
 
 (defrecord Empty []
   View
@@ -35,6 +41,14 @@
   View
   (run* [this input true-case false-case]
     (true-case (f input) nil)))
+
+(extend-protocol View
+  java.util.regex.Pattern
+  (run* [this input true-case false-case]
+    (if-let [output (and (instance? java.lang.CharSequence input)
+                         (re-find this input))]
+      (true-case output nil)
+      (false-case))))
 
 (defn case-view* [views input true-case false-case]
   (if-let [[view & views] views]
@@ -62,13 +76,6 @@
   (let [bindings (for [[var views] (partition 2 extensions)]
                    [var `(case ~@views)])]
     `(binding [~@(apply concat bindings)] ~@body)))
-
-(extend-protocol View
-  java.util.regex.Pattern
-  (run* [this input true-case false-case]
-    (if-let [output (re-find this input)]
-      (true-case output nil)
-      (false-case))))
 
 ;; TESTS
 

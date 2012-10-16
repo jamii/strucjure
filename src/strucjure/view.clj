@@ -32,15 +32,10 @@
 (defn expand [view input]
   (run* view input (fn [output _] (expand view output)) (fn [] input)))
 
-(defrecord Empty []
-  View
-  (run* [this input true-case false-case]
-    (false-case)))
-
 (defrecord Fn [f]
   View
   (run* [this input true-case false-case]
-    (true-case (f input) nil)))
+    (f input true-case false-case)))
 
 (extend-protocol View
   java.util.regex.Pattern
@@ -79,6 +74,10 @@
 
 ;; TESTS
 
+(defn wrap [f]
+  (->Fn (fn [input true-case _]
+          (true-case (f input) nil))))
+
 (defn run-and-catch [view input]
   (try+
    (run view input)
@@ -86,14 +85,14 @@
    (catch (instance? PartialMatch %) partial-match partial-match)))
 
 (deftest fn-test
-  (is (= 2 (run (->Fn inc) 1))))
+  (is (= 2 (run (wrap inc) 1))))
 
 (deftest regex-test
   (is (instance? NoMatch (run-and-catch #"foo" "bar"))
       (= ["foo" "oo"] (run #"f(o+)" "f foo foooo"))))
 
 (deftest case-test
-  (is (= 2 (run (case (->Fn inc) (->Fn identity)) 1)))
+  (is (= 2 (run (case (wrap inc) (wrap identity)) 1)))
   (is (= "foo" (run (case #"bar" #"baz" #"foo" #"fo") "foo")))
   (is (= (case 1 2 3 4) (case (case 1 2 3 4)) (case (case 1 2) 3 (case 4)))))
 

@@ -16,18 +16,6 @@
 ;; provide syntax for matching record literals #user.Foo{} and set literals
 ;; allow optional keys?
 ;; think about extensibility and memoization
-;; use & pattern instead of (& pattern)
-;; if make view a protocol, can do things like (regex pattern) for free but lose IFn on compiled views
-;; separate into pattern level (ie *-ast) and code level ASTs
-
-;; --- GENSYMS ---
-;; want to be able to detect symbols created by strucjure
-
-(defn gensym [name]
-  (clojure.core/gensym (str name "__strucjure__")))
-
-(defn gensym? [symbol]
-  (re-find #"__strucjure__\d+"))
 
 ;; --- VIEWS ---
 
@@ -60,6 +48,78 @@
 (defn expand [view input]
   (view input (fn [output _] (expand view output)) (fn [] input)))
 
+;; --- WALKS ---
+
+(defn walk [inner form]
+  (cond
+   (instance? clojure.lang.IRecord form) (clojure.lang.Reflector/invokeConstructor (class form) (to-array (map inner (vals form))))
+   (list? form) (apply list (map inner form))
+   (instance? clojure.lang.IMapEntry form) (vec (map inner form))
+   (seq? form) (doall (map inner form))
+   (coll? form) (into (empty form) (map inner form))
+   :else form))
+
+(defn visit [inner form]
+  (when (instance? clojure.lang.Seqable form)
+    (doseq [inner-form form]
+      (inner inner-form))))
+
+(defn postwalk [f form]
+  (f (walk (partial postwalk f) form)))
+
+(defn prewalk [f form]
+  (walk (partial prewalk f) (f form)))
+
+(defn postvisit [f form]
+  (visit (partial postvisit f) form)
+  (f form))
+
+(defn previsit [f form]
+  (f form)
+  (visit (partial previsit f) form))
+
+(defn map-reduce [view init form]
+  (let [acc (atom init)
+        visit-fn (fn [input]
+                    (view [input @acc]
+                          (fn [new-acc _]
+                            (compare-and-set! acc @acc new-acc))
+                          (fn [] nil)))]
+    (previsit visit-fn form)
+    @acc))
+
+(defn collect [view form]
+  (let [acc (atom ())
+        visit-fn (fn [input]
+                   (view input
+                         (fn [output _]
+                           (swap! acc conj output))
+                         (fn [] nil)))]
+    (previsit visit-fn form)
+    @acc))
+
+(defn postwalk-replace [view form]
+  (postwalk (partial replace view) form))
+
+(defn prewalk-replace [view form]
+  (prewalk (partial replace view) form))
+
+(defn postwalk-expand [view form]
+  (postwalk (partial expand view) form))
+
+(defn prewalk-expand [view form]
+  (prewalk (partial expand view) form))
+
+;; --- GENSYMS ---
+;; want to be able to detect symbols created by strucjure
+
+(defn gensym [name]
+  (clojure.core/gensym (str name "__strucjure__")))
+
+(defn gensym? [form]
+  (and (symbol? form)
+       (re-find #"__strucjure__\d+" (name form))))
+
 ;; --- THUNKS ---
 ;; Used to avoid exponential expansion of code in repeated branches
 
@@ -90,15 +150,6 @@
 
 ;; --- COMPILER STAGES ---
 
-(def input-sym '%)
-
-(defn replace-input-sym [input form]
-  (clojure.walk/prewalk-replace {input-sym input} form))
-
-;; An optimiser for clj code
-
-(def clj->clj identity)
-
 ;; Low-level AST forms correspond directly to clj code
 
 (defrecord State [input bindings thunks])
@@ -109,7 +160,7 @@
     "Output code which tests the pattern against input with the supplied bindings. May add new thunks to the list. The success branch should be ~(true-case rest new-bindings) and the failure branch should be ~false-case."))
 
 (defn last->clj [last state true-case false-case]
-  (clj->clj (last->clj* last state true-case false-case)))
+  (last->clj* last state true-case false-case))
 
 ;; High-level AST forms behave like macros which expand to low-level AST forms
 
@@ -133,6 +184,20 @@
 
 ;; --- COMPILER ---
 
+(def input-sym '%)
+
+(defn replace-input-sym [input form]
+  (clojure.walk/prewalk-replace {input-sym input} form))
+
+(defn primitive? [value]
+  (or (nil? value)
+      (true? value)
+      (false? value)
+      (number? value)
+      (string? value)
+      (char? value)
+      (keyword? value)))
+
 ;; Here true-case is (fn [output rest] code), false-case is code
 (defn compile-inline [case input bindings true-case false-case wrapper]
   (let [thunks (atom [])
@@ -155,9 +220,11 @@
     (compile-inline case input bindings true-case false-case wrapper)))
 
 (defn succeed-inline [case input output rest]
-  `(if (= nil ~rest)
-     ~output
-     (throw+ (->PartialMatch '~(vec case) ~input ~output ~rest))))
+  (if (= nil rest)
+    output
+    `(if (= nil ~rest)
+       ~output
+       (throw+ (->PartialMatch '~(vec case) ~input ~output ~rest)))))
 
 (defn fail-inline [case input]
   `(throw+ (->NoMatch '~(vec case) ~input)))
@@ -167,7 +234,10 @@
     (compile-inline case input #{}
                     (partial succeed-inline case input)
                     (fail-inline case input)
-                    (fn [start] `(let [~input ~value] ~start)))))
+                    (fn [start]
+                      (if (or (primitive? input) (symbol? input))
+                        start
+                        `(let [~input ~value] ~start))))))
 
 (defmacro view [& case]
   (compile-view case #{} identity))
@@ -196,8 +266,10 @@
   (last->clj* [this {:keys [input bindings]} true-case false-case]
     (let [form (replace-input-sym input form)
           left (gensym "left")]
-      `(let [~left ~form]
-         ~(true-case left (conj bindings left))))))
+      (if (or (symbol? form) (primitive? form))
+        (true-case form bindings)
+        `(let [~left ~form]
+           ~(true-case left (conj bindings left)))))))
 
 ;; Succeeds if form evaluates to true. Does not consume anything
 (defrecord Guard [form]
@@ -206,6 +278,18 @@
     `(if ~(replace-input-sym input form)
        ~(true-case input bindings)
        ~false-case)))
+
+;; Same as (->GuardNil) but can sometimes be compiled away
+(defrecord GuardNil []
+  LAST
+  (last->clj* [this {:keys [input bindings]} true-case false-case]
+    (if (= nil input)
+      ;; hardcoded to nil, will always succeed
+      (true-case nil bindings)
+      ;; otherwise, need to test at runtime
+      `(if (= nil ~input)
+         ~(true-case nil bindings)
+         ~false-case))))
 
 ;; If symbol is already bound, tests for equality.
 ;; Otherwise binds input to symbol
@@ -318,7 +402,7 @@
 (defrecord Import [view pattern]
   HAST
   (hast->last* [this]
-    (->Import* view (seq-ast pattern (->Guard `(= nil ~input-sym))))))
+    (->Import* view (seq-ast pattern (->GuardNil)))))
 
 (defrecord Literal [literal]
   HAST
@@ -332,7 +416,7 @@
     (seq-ast (->Guard `(not= nil ~input-sym))
              (and-ast (seq-ast (->Leave `(first ~input-sym))
                                pattern
-                               (->Guard `(= nil ~input-sym)))
+                               (->GuardNil))
                       (->Leave `(next ~input-sym))))))
 
 (defrecord Instance [class-name]
@@ -357,7 +441,7 @@
   (hast->last* [this]
     (seq-ast
      (->Prefix patterns)
-     (->Guard `(= nil ~input-sym)))))
+     (->GuardNil))))
 
 (defn seqable-ast [& patterns] (->Seqable patterns))
 
@@ -368,7 +452,7 @@
      (->Leave `(get ~input-sym ~key ::not-found))
      (->Guard `(not= ::not-found ~input-sym))
      pattern
-     (->Guard `(= nil ~input-sym)))))
+     (->GuardNil))))
 
 (defrecord Map [keys&patterns]
   HAST
@@ -402,15 +486,6 @@
       (->Seqable (map ->Head arg-patterns))))))
 
 ;; --- PARSER UTILS ---
-
-(defn primitive? [value]
-  (or (nil? value)
-      (true? value)
-      (false? value)
-      (number? value)
-      (string? value)
-      (char? value)
-      (keyword? value)))
 
 (defn binding? [value]
   (and (symbol? value)
@@ -618,68 +693,8 @@
   ;; IMPORTED VIEWS
   (and seq? [?view (pattern->hast ?pattern)]) (->Import view pattern))
 
-;; --- OPTIMISERS ---
+;; --- TESTS ---
 
-
-
-;; --- WALKS ---
-
-(defn walk [inner form]
-  (cond
-   (instance? clojure.lang.IRecord form) (clojure.lang.Reflector/invokeConstructor (class form) (to-array (map inner (vals form))))
-   (list? form) (apply list (map inner form))
-   (instance? clojure.lang.IMapEntry form) (vec (map inner form))
-   (seq? form) (doall (map inner form))
-   (coll? form) (into (empty form) (map inner form))
-   :else form))
-
-(defn visit [inner form]
-  (when (instance? clojure.lang.Seqable form)
-    (doseq [inner-form form]
-      (inner inner-form))))
-
-(defn postwalk [f form]
-  (f (walk (partial postwalk f) form)))
-
-(defn prewalk [f form]
-  (walk (partial prewalk f) (f form)))
-
-(defn postvisit [f form]
-  (visit (partial postvisit f) form)
-  (f form))
-
-(defn previsit [f form]
-  (f form)
-  (visit (partial previsit f) form))
-
-(defn map-reduce [view init form]
-  (let [acc (atom init)
-        visit-fn (fn [input]
-                    (view [input @acc]
-                          (fn [new-acc _]
-                            (compare-and-set! acc @acc new-acc))
-                          (fn [] nil)))]
-    (previsit visit-fn form)
-    @acc))
-
-(defn collect [view form]
-  (let [acc (atom ())
-        visit-fn (fn [input]
-                   (view input
-                         (fn [output _]
-                           (swap! acc conj output))
-                         (fn [] nil)))]
-    (previsit visit-fn form)
-    @acc))
-
-(defn postwalk-replace [view form]
-  (postwalk (partial replace view) form))
-
-(defn prewalk-replace [view form]
-  (prewalk (partial replace view) form))
-
-(defn postwalk-expand [view form]
-  (postwalk (partial expand view) form))
-
-(defn prewalk-expand [view form]
-  (prewalk (partial expand view) form))
+(deftest self-describing
+  (is (recompile seq-pattern->hast))
+  (is (recompile pattern->hast)))

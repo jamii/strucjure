@@ -111,7 +111,7 @@
   (prewalk (partial expand view) form))
 
 ;; --- GENSYMS ---
-;; want to be able to detect symbols created by strucjure
+;; Want to be able to detect symbols created by strucjure
 
 (defn gensym [name]
   (clojure.core/gensym (str name "__strucjure__")))
@@ -198,13 +198,11 @@
       (char? value)
       (keyword? value)))
 
-;; Here true-case is (fn [output rest] code), false-case is code
-(defn compile-inline [case input bindings true-case false-case wrapper]
+(defn compile-inline [hast input bindings false-case wrapper]
   (let [thunks (atom [])
         bindings (conj bindings input)
         state (->State input bindings thunks)
-        start (-> case
-                  (case->hast true-case)
+        start (-> hast
                   hast->last
                   (last->clj state (fn [_ _] (thunk `(throw+ ::unreachable))) false-case))]
     `(letfn [~@@thunks] ~(wrapper start))))
@@ -216,8 +214,9 @@
         bindings (conj bindings true-cont false-cont)
         true-case (fn [output rest] (thunk `(~true-cont ~output ~rest)))
         false-case (thunk `(~false-cont))
-        wrapper (fn [start] (wrapper `(->View '~case (fn [~input ~true-cont ~false-cont] ~start))))]
-    (compile-inline case input bindings true-case false-case wrapper)))
+        wrapper (fn [start] (wrapper `(->View '~case (fn [~input ~true-cont ~false-cont] ~start))))
+        hast (case->hast case true-case)]
+    (compile-inline hast input bindings false-case wrapper)))
 
 (defn succeed-inline [case input output rest]
   (if (= nil rest)
@@ -284,9 +283,9 @@
   LAST
   (last->clj* [this {:keys [input bindings]} true-case false-case]
     (if (= nil input)
-      ;; hardcoded to nil, will always succeed
+      ;; Hardcoded to nil, will always succeed
       (true-case nil bindings)
-      ;; otherwise, need to test at runtime
+      ;; Otherwise, need to test at runtime
       `(if (= nil ~input)
          ~(true-case nil bindings)
          ~false-case))))
@@ -298,11 +297,11 @@
   LAST
   (last->clj* [this {:keys [input bindings]} true-case false-case]
     (if (contains? bindings symbol)
-      ;; test for equality
+      ;; Test for equality
       `(if (= ~symbol ~input)
          ~(true-case nil bindings)
          ~false-case)
-      ;; bind symbol
+      ;; Bind symbol
       `(let [~symbol ~input]
          ~(true-case nil (conj bindings symbol))))))
 
@@ -512,9 +511,9 @@
        (.endsWith (name value) "?")))
 
 ;; --- BOOTSTRAP PARSER ---
-;; we write HASTs directly to build up a basic parser and then use that to write the real parser
+;; We write HASTs directly to build up a basic parser and then use that to write the real parser
 
-;; temporary definition, until we have a basic parser
+;; Temporary definition, until we have a basic parser
 (defn case->hast [hasts&values true-case]
   (assert (even? (count hasts&values)))
   (->Or

@@ -63,7 +63,7 @@
 (defn prewalk-expand [view form]
   (prewalk (partial strucjure.view/expand view) form))
 
-;; TESTS
+;; --- TESTS ---
 ;; really need quickcheck in here
 
 (defrecord Leaf [x])
@@ -95,7 +95,7 @@
   (is (= list-form (postwalk tree->list tree-form))))
 
 (def str-reduce
-  (strucjure.view/->Fn
+  (strucjure.view/->Raw
    (fn [[input acc]]
      (if (string? input)
        (str input acc)
@@ -118,4 +118,4 @@
 (deftest replace-test
   (is (=
        (clojure.walk/prewalk-replace replaced-strings list-form)
-       (prewalk-replace (strucjure.view/->Fn replace-string) list-form))))
+       (prewalk-replace (strucjure.view/->Raw replace-string) list-form))))

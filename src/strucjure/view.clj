@@ -32,7 +32,7 @@
 (defn expand [view input]
   (run* view input (fn [output _] (expand view output)) (fn [] input)))
 
-(defrecord Fn [f]
+(defrecord Raw [f]
   View
   (run* [this input true-case false-case]
     (f input true-case false-case)))
@@ -55,6 +55,8 @@
   View
   (run* [this input true-case false-case]
     (case-view* (seq views) input true-case false-case)))
+
+(def empty (->Case []))
 
 (defn case [& views]
   (->Case (flatten
@@ -81,10 +83,10 @@
                    [var `(case ~@views)])]
     `(binding [~@(apply concat bindings)] ~@body)))
 
-;; TESTS
+;; --- TESTS ---
 
 (defn wrap [f]
-  (->Fn (fn [input true-case _]
+  (->Raw (fn [input true-case _]
           (true-case (f input) nil))))
 
 (defn run-and-catch [view input]

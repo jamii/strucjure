@@ -110,16 +110,6 @@
 (defn prewalk-expand [view form]
   (prewalk (partial expand view) form))
 
-;; --- GENSYMS ---
-;; Want to be able to detect symbols created by strucjure
-
-(defn gensym [name]
-  (clojure.core/gensym (str name "__strucjure__")))
-
-(defn gensym? [form]
-  (and (symbol? form)
-       (re-find #"__strucjure__\d+" (name form))))
-
 ;; --- THUNKS ---
 ;; Used to avoid exponential expansion of code in repeated branches
 
@@ -198,13 +188,14 @@
       (char? value)
       (keyword? value)))
 
-(defn compile-inline [hast input bindings false-case wrapper]
+(defn compile-inline [hast input bindings wrapper]
   (let [thunks (atom [])
         bindings (conj bindings input)
         state (->State input bindings thunks)
+        unreachable (thunk `(throw+ ::unreachable)) ; this will only be reached if the hast has a branch without Succeed/Fail
         start (-> hast
                   hast->last
-                  (last->clj state (fn [_ _] (thunk `(throw+ ::unreachable))) false-case))]
+                  (last->clj state (fn [_ _] unreachable) unreachable))]
     `(letfn [~@@thunks] ~(wrapper start))))
 
 (defn compile-view [case bindings wrapper]
@@ -214,29 +205,9 @@
         bindings (conj bindings true-cont false-cont)
         true-case (fn [output rest] (thunk `(~true-cont ~output ~rest)))
         false-case (thunk `(~false-cont))
-        wrapper (fn [start] (wrapper `(->View '~case (fn [~input ~true-cont ~false-cont] ~start))))
-        hast (case->hast case true-case)]
-    (compile-inline hast input bindings false-case wrapper)))
-
-(defn succeed-inline [case input output rest]
-  (if (= nil rest)
-    output
-    `(if (= nil ~rest)
-       ~output
-       (throw+ (->PartialMatch '~(vec case) ~input ~output ~rest)))))
-
-(defn fail-inline [case input]
-  `(throw+ (->NoMatch '~(vec case) ~input)))
-
-(defmacro match [value & case]
-  (let [input (gensym "input")]
-    (compile-inline case input #{}
-                    (partial succeed-inline case input)
-                    (fail-inline case input)
-                    (fn [start]
-                      (if (or (primitive? input) (symbol? input))
-                        start
-                        `(let [~input ~value] ~start))))))
+        hast (case->hast case true-case false-case)
+        wrapper (fn [start] (wrapper `(->View '~case (fn [~input ~true-cont ~false-cont] ~start))))]
+    (compile-inline hast input bindings wrapper)))
 
 (defmacro view [& case]
   (compile-view case #{} identity))
@@ -371,11 +342,17 @@
               (fn [_ _] false-case)
               (true-case nil bindings))))
 
-;; Breaks out of the pattern and returns an output
-(defrecord Return [true-cont]
+;; Breaks out of the decision tree and returns a value
+(defrecord Succeed [view-true-case]
   LAST
-  (last->clj* [this {:keys [input bindings]} true-case false-case]
-    (true-cont input)))
+  (last->clj* [this {:keys [input]} true-case false-case]
+    (view-true-case input)))
+
+;; Does what it says on the tin
+(defrecord Fail [view-false-case]
+  LAST
+  (last->clj* [this state true-case false-case]
+    view-false-case))
 
 ;; --- HIGH-LEVEL AST ---
 
@@ -514,11 +491,13 @@
 ;; We write HASTs directly to build up a basic parser and then use that to write the real parser
 
 ;; Temporary definition, until we have a basic parser
-(defn case->hast [hasts&values true-case]
+(defn case->hast [hasts&values true-case false-case]
   (assert (even? (count hasts&values)))
   (->Or
-   (for [[hast value] (partition 2 hasts&values)]
-     (seq-ast (eval hast) (->Return (partial true-case value))))))
+   (flatten
+    [(for [[hast value] (partition 2 hasts&values)]
+       (seq-ast (eval hast) (->Succeed (partial true-case value))))
+     (->Fail false-case)])))
 
 (defnview zero-or-more [elem]
   (prefix-ast (->Head (->Import 'elem (->Bind 'x)))
@@ -614,11 +593,13 @@
 
 ;; --- REAL PARSER ---
 
-(defn case->hast [patterns&values true-case]
+(defn case->hast [patterns&values true-case false-case]
   (assert (even? (count patterns&values)))
   (->Or
-   (for [[pattern value] (partition 2 patterns&values)]
-     (seq-ast (pattern->hast pattern) (->Return (partial true-case value))))))
+   (flatten
+    [(for [[pattern value] (partition 2 patterns&values)]
+       (seq-ast (pattern->hast pattern) (->Succeed (partial true-case value))))
+     (->Fail false-case)])))
 
 (defnview optional [elem]
   (prefix (elem ?x)) x
@@ -691,6 +672,28 @@
 
   ;; IMPORTED VIEWS
   (and seq? [?view (pattern->hast ?pattern)]) (->Import view pattern))
+
+;; --- MATCH FORMS ---
+
+(defn succeed-inline [case input output rest]
+  (if (= nil rest)
+    output
+    `(if (= nil ~rest)
+       ~output
+       (throw+ (->PartialMatch '~(vec case) ~input ~output ~rest)))))
+
+(defn fail-inline [case input]
+  `(throw+ (->NoMatch '~(vec case) ~input)))
+
+(defmacro match [value & case]
+  (let [input (gensym "input")]
+    (compile-inline (case->hast case (partial succeed-inline case input) (fail-inline case input))
+                    input
+                    #{}
+                    (fn [start]
+                      (if (or (primitive? value) (symbol? value))
+                        (clojure.walk/prewalk-replace {input value} start)
+                        `(let [~input ~value] ~start))))))
 
 ;; --- TESTS ---
 

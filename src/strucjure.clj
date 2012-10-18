@@ -328,7 +328,7 @@
     (let [true-case-input (gensym "true-case-input__")
           true-case-bindings (conj bindings true-case-input)
           true-case-thunk (thunkify thunks true-case-bindings (true-case true-case-input true-case-bindings))
-          true-case (fn [rest _] (clojure.walk/prewalk-replace {true-case-thunk true-case-input} rest))]
+          true-case (fn [rest _] (clojure.walk/prewalk-replace {true-case-input rest} true-case-thunk))]
       (last->clj pattern-a state true-case
                 (last->clj pattern-b state true-case false-case)))))
 

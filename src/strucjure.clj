@@ -203,8 +203,8 @@
         true-cont (gensym "true-cont")
         false-cont (gensym "false-cont")
         bindings (conj bindings true-cont false-cont)
-        true-case (fn [output rest] (thunk `(~true-cont ~output ~rest)))
-        false-case (thunk `(~false-cont))
+        true-case (fn [output rest] `(~true-cont ~output ~rest))
+        false-case `(~false-cont)
         hast (case->hast case true-case false-case)
         wrapper (fn [start] (wrapper `(->View '~src (fn [~input ~true-cont ~false-cont] ~start))))]
     (compile-inline hast input bindings wrapper)))
@@ -328,7 +328,7 @@
     (let [true-case-input (gensym "true-case-input__")
           true-case-bindings (conj bindings true-case-input)
           true-case-thunk (thunkify thunks true-case-bindings (true-case true-case-input true-case-bindings))
-          true-case (fn [rest _] (clojure.walk/prewalk-replace {true-case-input rest} true-case-thunk))]
+          true-case (fn [rest _] (thunk (clojure.walk/prewalk-replace {true-case-input rest} true-case-thunk)))]
       (last->clj pattern-a state true-case
                 (last->clj pattern-b state true-case false-case)))))
 
@@ -342,17 +342,21 @@
               (fn [_ _] false-case)
               (true-case nil bindings))))
 
+;; TODO: do we really want thunks in here?
+;;       forms like try+ can expand to a lot of code...
+;;       can't put thunk in arg because hast->last erases it
+
 ;; Breaks out of the decision tree and returns a value
 (defrecord Succeed [view-true-case]
   LAST
   (last->clj* [this {:keys [input]} true-case false-case]
-    (view-true-case input)))
+    (thunk (view-true-case input))))
 
 ;; Does what it says on the tin
 (defrecord Fail [view-false-case]
   LAST
   (last->clj* [this state true-case false-case]
-    view-false-case))
+    (thunk view-false-case)))
 
 ;; --- HIGH-LEVEL AST ---
 

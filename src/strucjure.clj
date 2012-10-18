@@ -43,13 +43,7 @@
 (defn matches? [view input]
   (view input (fn [_ _] true) (fn [] false)))
 
-(defn replace [view input]
-  (view input (fn [output _] output) (fn [] input)))
-
-(defn expand [view input]
-  (view input (fn [output _] (expand view output)) (fn [] input)))
-
-;; --- WALKS ---
+;; --- UTILS ---
 
 (defn walk [inner form]
   (cond
@@ -59,59 +53,6 @@
    (seq? form) (doall (map inner form))
    (coll? form) (into (empty form) (map inner form))
    :else form))
-
-(defn visit [inner form]
-  (when (instance? clojure.lang.Seqable form)
-    (doseq [inner-form form]
-      (inner inner-form))))
-
-(defn postwalk [f form]
-  (f (walk (partial postwalk f) form)))
-
-(defn prewalk [f form]
-  (walk (partial prewalk f) (f form)))
-
-(defn postvisit [f form]
-  (visit (partial postvisit f) form)
-  (f form))
-
-(defn previsit [f form]
-  (f form)
-  (visit (partial previsit f) form))
-
-(defn map-reduce [view init form]
-  (let [acc (atom init)
-        visit-fn (fn [input]
-                    (view [input @acc]
-                          (fn [new-acc _]
-                            (compare-and-set! acc @acc new-acc))
-                          (fn [] nil)))]
-    (previsit visit-fn form)
-    @acc))
-
-(defn collect [view form]
-  (let [acc (atom ())
-        visit-fn (fn [input]
-                   (view input
-                         (fn [output _]
-                           (swap! acc conj output))
-                         (fn [] nil)))]
-    (previsit visit-fn form)
-    @acc))
-
-(defn postwalk-replace [view form]
-  (postwalk (partial replace view) form))
-
-(defn prewalk-replace [view form]
-  (prewalk (partial replace view) form))
-
-(defn postwalk-expand [view form]
-  (postwalk (partial expand view) form))
-
-(defn prewalk-expand [view form]
-  (prewalk (partial expand view) form))
-
-;; --- UTILS ---
 
 (defn primitive? [value]
   (or (nil? value)
@@ -764,29 +705,6 @@
 
 (defmacro doseq-match [patterns&values & body]
   (compile-doseq patterns&values body))
-
-;; A strucjure is a degenerate view that returns its input on match
-;; They are useful in conjunction with on/before/after-matching
-
-(defn compile-strucjure [patterns src bindings wrapper]
-  (let [input (gensym "input")
-        patterns&values (apply concat (for [pattern patterns] [pattern input]))]
-    (compile-view input patterns&values src bindings wrapper)))
-
-(defmacro strucjure [& patterns]
-  (compile-strucjure patterns `(strucjure ~@patterns) #{} identity))
-
-(defmacro defstrucjure [name & patterns]
-  `(def ~name
-     ~(compile-strucjure patterns
-                         `(defstrucjure ~name ~@patterns)
-                         #{} identity)))
-
-(defmacro defnstrucjure [name args & patterns]
-  `(def ~name
-     ~(compile-strucjure patterns
-                         `(defnstrucjure ~name ~args ~@patterns)
-                         (set args) (fn [start] `(fn [~@args] ~start)))))
 
 ;; --- TESTS ---
 

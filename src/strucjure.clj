@@ -196,7 +196,6 @@
 
 (defn compile-inline [hast input bindings wrapper]
   (let [thunks (atom [])
-        bindings (conj bindings input)
         state (->State input bindings thunks)
         unreachable ::unreachable ; this will only be reached if the hast has a branch without Succeed/Fail
         start (-> hast
@@ -204,16 +203,18 @@
                   (last->clj state (fn [_ _] unreachable) unreachable))]
     `(letfn [~@@thunks] ~(wrapper start))))
 
-(defn compile-view [patterns&values src bindings wrapper]
-  (let [input (gensym "input")
-        true-cont (gensym "true-cont")
-        false-cont (gensym "false-cont")
-        bindings (conj bindings true-cont false-cont)
-        true-case (fn [output rest] `(~true-cont ~output ~rest))
-        false-case `(~false-cont)
-        hast (case->hast patterns&values true-case false-case)
-        wrapper (fn [start] (wrapper `(->View '~src (fn [~input ~true-cont ~false-cont] ~start))))]
-    (compile-inline hast input bindings wrapper)))
+(defn compile-view
+  ([patterns&values src bindings wrapper]
+     (compile-view (gensym "input") patterns&values src bindings wrapper))
+  ([input patterns&values src bindings wrapper]
+     (let [true-cont (gensym "true-cont")
+           false-cont (gensym "false-cont")
+           bindings (conj bindings input true-cont false-cont)
+           true-case (fn [output rest] `(~true-cont ~output ~rest))
+           false-case `(~false-cont)
+           hast (case->hast patterns&values true-case false-case)
+           wrapper (fn [start] (wrapper `(->View '~src (fn [~input ~true-cont ~false-cont] ~start))))]
+       (compile-inline hast input bindings wrapper))))
 
 (defmacro view [& patterns&values]
   (compile-view patterns&values `(view ~@patterns&values) #{} identity))
@@ -715,7 +716,7 @@
                       (if (flat? value)
                         (clojure.walk/prewalk-replace {input value} start)
                         `(let [~input ~value] ~start)))]
-    (compile-inline hast input #{} wrapper)))
+    (compile-inline hast input #{input} wrapper)))
 
 (defmacro match [value & patterns&values]
   (compile-match value patterns&values))
@@ -763,6 +764,29 @@
 
 (defmacro doseq-match [patterns&values & body]
   (compile-doseq patterns&values body))
+
+;; A strucjure is a degenerate view that returns its input on match
+;; They are useful in conjunction with on/before/after-matching
+
+(defn compile-strucjure [patterns src bindings wrapper]
+  (let [input (gensym "input")
+        patterns&values (apply concat (for [pattern patterns] [pattern input]))]
+    (compile-view input patterns&values src bindings wrapper)))
+
+(defmacro strucjure [& patterns]
+  (compile-strucjure patterns `(strucjure ~@patterns) #{} identity))
+
+(defmacro defstrucjure [name & patterns]
+  `(def ~name
+     ~(compile-strucjure patterns
+                         `(defstrucjure ~name ~@patterns)
+                         #{} identity)))
+
+(defmacro defnstrucjure [name args & patterns]
+  `(def ~name
+     ~(compile-strucjure patterns
+                         `(defnstrucjure ~name ~args ~@patterns)
+                         (set args) (fn [start] `(fn [~@args] ~start)))))
 
 ;; --- TESTS ---
 

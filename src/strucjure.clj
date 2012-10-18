@@ -16,6 +16,7 @@
 ;; provide syntax for matching record literals #user.Foo{} and set literals
 ;; allow optional keys?
 ;; think about extensibility and memoization
+;; might want to truncate input/output/rest in error messages
 
 ;; --- VIEWS ---
 
@@ -358,6 +359,16 @@
   (last->clj* [this state true-case false-case]
     (thunk view-false-case)))
 
+;; Kind of hacky making this a full-blown LAST
+(defrecord Doseq* [pattern seq]
+  LAST
+  (last->clj* [this {:keys [bindings] :as state} true-case false-case]
+    (let [elem (gensym "elem")
+          bindings (conj bindings elem)
+          state (assoc state :input elem :bindings bindings)]
+      `(doseq [~elem ~seq]
+         ~(last->clj pattern state true-case nil)))))
+
 ;; --- HIGH-LEVEL AST ---
 
 (defrecord Or [patterns]
@@ -690,9 +701,11 @@
   `(throw+ (->NoMatch '~src ~input)))
 
 (defn compile-match [value patterns&values]
-  (let [input (gensym "input")
-        src `(match ~value ~@patterns&values)
-        hast (case->hast patterns&values (partial succeed-inline src input) (fail-inline src input))
+  (let [src `(match ~value ~@patterns&values)
+        input (gensym "input")
+        true-case (partial succeed-inline src input)
+        false-case (fail-inline src input)
+        hast (case->hast patterns&values true-case false-case)
         wrapper (fn [start]
                       (if (or (primitive? value) (symbol? value))
                         (clojure.walk/prewalk-replace {input value} start)
@@ -727,6 +740,24 @@
 
 (defmacro let-match [patterns&values & body]
   (compile-let patterns&values body))
+
+(defn doseq->hast [patterns&values body true-case]
+  (assert (even? (count patterns&values)))
+  (reduce
+   (fn [hast [pattern value]]
+     (->Doseq* (->Seq* (pattern->hast pattern) hast) value))
+   (->Succeed (partial true-case `(do ~@body)))
+   (reverse (partition 2 patterns&values))))
+
+(defn compile-doseq [patterns&values body]
+  (let [src `(doseq-match ~patterns&values ...)
+        input (vec (take-nth 2 (rest patterns&values)))
+        true-case (partial succeed-inline src input)
+        hast (doseq->hast patterns&values body true-case)]
+    (compile-inline hast nil #{} identity)))
+
+(defmacro doseq-match [patterns&values & body]
+  (compile-doseq patterns&values body))
 
 ;; --- TESTS ---
 

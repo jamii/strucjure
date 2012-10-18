@@ -161,24 +161,16 @@
   (compile-view patterns&values `(view ~@patterns&values) #{} identity))
 
 (defmacro defview [name & patterns&values]
-  `(def ~name
+  `(def ^:dynamic ~name
      ~(compile-view patterns&values
                     `(defview ~name ~@patterns&values)
                     #{} identity)))
 
 (defmacro defnview [name args & patterns&values]
-  `(def ~name
+  `(def ^:dynamic ~name
      ~(compile-view patterns&values
                     `(defnview ~name ~args ~@patterns&values)
                     (set args) (fn [start] `(fn [~@args] ~start)))))
-
-(defn recompile* [view-var]
-  (alter-var-root view-var
-                  (fn [{:keys [src]}] (eval src))))
-
-;; WARNING: the view src is not syntax-quoted so this must be called with the same scope as the original view
-(defmacro recompile [view]
-  `(recompile* (var ~view)))
 
 ;; --- LOW-LEVEL AST ---
 
@@ -709,5 +701,5 @@
 ;; --- TESTS ---
 
 (deftest self-describing
-  (is (recompile seq-pattern->hast))
-  (is (recompile pattern->hast)))
+  (is (macroexpand-1 (:src seq-pattern->hast)))
+  (is (macroexpand-1 (:src pattern->hast))))

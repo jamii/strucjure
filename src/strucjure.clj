@@ -198,7 +198,7 @@
                   (last->clj state (fn [_ _] unreachable) unreachable))]
     `(letfn [~@@thunks] ~(wrapper start))))
 
-(defn compile-view [case bindings wrapper]
+(defn compile-view [case src bindings wrapper]
   (let [input (gensym "input")
         true-cont (gensym "true-cont")
         false-cont (gensym "false-cont")
@@ -206,23 +206,23 @@
         true-case (fn [output rest] (thunk `(~true-cont ~output ~rest)))
         false-case (thunk `(~false-cont))
         hast (case->hast case true-case false-case)
-        wrapper (fn [start] (wrapper `(->View '~case (fn [~input ~true-cont ~false-cont] ~start))))]
+        wrapper (fn [start] (wrapper `(->View '~src (fn [~input ~true-cont ~false-cont] ~start))))]
     (compile-inline hast input bindings wrapper)))
 
 (defmacro view [& case]
-  (compile-view case #{} identity))
+  (compile-view case `(view ~@case) #{} identity))
 
 (defmacro defview [name & case]
   `(def ~name
-     ~(compile-view case #{} identity)))
+     ~(compile-view case `(defview ~name ~@case) #{} identity)))
 
 (defmacro defnview [name args & case]
   `(def ~name
-     ~(compile-view case (set args) (fn [start] `(fn [~@args] ~start)))))
+     ~(compile-view case `(defnview ~name ~args ~@case) (set args) (fn [start] `(fn [~@args] ~start)))))
 
 (defn recompile* [view-var]
   (alter-var-root view-var
-                  (fn [{:keys [src]}] (eval `(view ~@src)))))
+                  (fn [{:keys [src]}] (eval src))))
 
 ;; WARNING: the view src is not syntax-quoted so this must be called with the same scope as the original view
 (defmacro recompile [view]
@@ -675,25 +675,28 @@
 
 ;; --- MATCH FORMS ---
 
-(defn succeed-inline [case input output rest]
+(defn succeed-inline [src input output rest]
   (if (= nil rest)
     output
     `(if (= nil ~rest)
        ~output
-       (throw+ (->PartialMatch '~(vec case) ~input ~output ~rest)))))
+       (throw+ (->PartialMatch '~src ~input ~output ~rest)))))
 
-(defn fail-inline [case input]
-  `(throw+ (->NoMatch '~(vec case) ~input)))
+(defn fail-inline [src input]
+  `(throw+ (->NoMatch '~src ~input)))
 
-(defmacro match [value & case]
-  (let [input (gensym "input")]
-    (compile-inline (case->hast case (partial succeed-inline case input) (fail-inline case input))
-                    input
-                    #{}
-                    (fn [start]
+(defn compile-match [value patterns&values]
+  (let [input (gensym "input")
+        src `(match ~value ~@patterns&values)
+        hast (case->hast patterns&values (partial succeed-inline src input) (fail-inline src input))
+        wrapper (fn [start]
                       (if (or (primitive? value) (symbol? value))
                         (clojure.walk/prewalk-replace {input value} start)
-                        `(let [~input ~value] ~start))))))
+                        `(let [~input ~value] ~start)))]
+    (compile-inline hast input #{} wrapper)))
+
+(defmacro match [value & patterns&values]
+  (compile-match value patterns&values))
 
 ;; --- TESTS ---
 

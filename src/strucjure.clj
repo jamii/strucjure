@@ -111,6 +111,21 @@
 (defn prewalk-expand [view form]
   (prewalk (partial expand view) form))
 
+;; --- UTILS ---
+
+(defn primitive? [value]
+  (or (nil? value)
+      (true? value)
+      (false? value)
+      (number? value)
+      (string? value)
+      (char? value)
+      (keyword? value)))
+
+(defn flat? [value]
+  (or (symbol? value)
+      (primitive? value)))
+
 ;; --- THUNKS ---
 ;; Used to avoid exponential expansion of code in repeated branches
 
@@ -127,7 +142,8 @@
   (with-meta form (assoc (meta form) ::thunk true)))
 
 (defn thunk? [form]
-  (get (meta form) ::thunk))
+  (or (flat? form)
+      (get (meta form) ::thunk)))
 
 (defn thunkify [thunks args form]
   (if (thunk? form)
@@ -180,15 +196,6 @@
 (defn replace-input-sym [input form]
   (clojure.walk/prewalk-replace {input-sym input} form))
 
-(defn primitive? [value]
-  (or (nil? value)
-      (true? value)
-      (false? value)
-      (number? value)
-      (string? value)
-      (char? value)
-      (keyword? value)))
-
 (defn compile-inline [hast input bindings wrapper]
   (let [thunks (atom [])
         bindings (conj bindings input)
@@ -237,7 +244,7 @@
   (last->clj* [this {:keys [input bindings]} true-case false-case]
     (let [form (replace-input-sym input form)
           left (gensym "left")]
-      (if (or (symbol? form) (primitive? form))
+      (if (flat? form)
         (true-case form bindings)
         `(let [~left ~form]
            ~(true-case left (conj bindings left)))))))
@@ -707,7 +714,7 @@
         false-case (fail-inline src input)
         hast (case->hast patterns&values true-case false-case)
         wrapper (fn [start]
-                      (if (or (primitive? value) (symbol? value))
+                      (if (flat? value)
                         (clojure.walk/prewalk-replace {input value} start)
                         `(let [~input ~value] ~start)))]
     (compile-inline hast input #{} wrapper)))

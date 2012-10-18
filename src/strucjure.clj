@@ -138,19 +138,17 @@
 (defn filter-used [args form]
   (vec (filter (symbols form) args)))
 
-(defn thunk [form]
-  (with-meta form (assoc (meta form) ::thunk true)))
-
-(defn thunk? [form]
+;; shallow things are *roughly* no larger than the thunk that would replace them
+(defn shallow? [form]
   (or (flat? form)
-      (get (meta form) ::thunk)))
+      (every? flat? (macroexpand form))))
 
 (defn thunkify [thunks args form]
-  (if (thunk? form)
+  (if (shallow? form)
       form
       (let [args (filter-used args form)
             name (gensym "thunk__")
-            thunk (thunk `(~name ~@args))
+            thunk `(~name ~@args)
             thunk-fn `(~name ~args ~form)]
         (swap! thunks conj thunk-fn)
         thunk)))
@@ -200,7 +198,7 @@
   (let [thunks (atom [])
         bindings (conj bindings input)
         state (->State input bindings thunks)
-        unreachable (thunk `(throw+ ::unreachable)) ; this will only be reached if the hast has a branch without Succeed/Fail
+        unreachable ::unreachable ; this will only be reached if the hast has a branch without Succeed/Fail
         start (-> hast
                   hast->last
                   (last->clj state (fn [_ _] unreachable) unreachable))]
@@ -336,7 +334,7 @@
     (let [true-case-input (gensym "true-case-input__")
           true-case-bindings (conj bindings true-case-input)
           true-case-thunk (thunkify thunks true-case-bindings (true-case true-case-input true-case-bindings))
-          true-case (fn [rest _] (thunk (clojure.walk/prewalk-replace {true-case-input rest} true-case-thunk)))]
+          true-case (fn [rest _] (clojure.walk/prewalk-replace {true-case-input rest} true-case-thunk))]
       (last->clj pattern-a state true-case
                 (last->clj pattern-b state true-case false-case)))))
 
@@ -350,21 +348,17 @@
               (fn [_ _] false-case)
               (true-case nil bindings))))
 
-;; TODO: do we really want thunks in here?
-;;       forms like try+ can expand to a lot of code...
-;;       can't put thunk in arg because hast->last erases it
-
 ;; Breaks out of the decision tree and returns a value
 (defrecord Succeed [view-true-case]
   LAST
   (last->clj* [this {:keys [input]} true-case false-case]
-    (thunk (view-true-case input))))
+    (view-true-case input)))
 
 ;; Does what it says on the tin
 (defrecord Fail [view-false-case]
   LAST
   (last->clj* [this state true-case false-case]
-    (thunk view-false-case)))
+    view-false-case))
 
 ;; Kind of hacky making this a full-blown LAST
 (defrecord Doseq* [pattern seq]

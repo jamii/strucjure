@@ -698,6 +698,32 @@
 (defmacro match [value & patterns&values]
   (compile-match value patterns&values))
 
+;; TODO: we can give per-binding failure messages if we can insert a Fail without losing bindings
+
+(defn let->hast [patterns&values body true-case false-case]
+  (assert (even? (count patterns&values)))
+  (or-ast
+   (->Seq
+    (flatten
+     [(for [[pattern value] (partition 2 patterns&values)]
+        (seq-ast
+         (->Leave value)
+         (pattern->hast pattern)
+         (->GuardNil)))
+      (->Succeed (partial true-case `(do ~@body)))]))
+   (->Fail false-case)))
+
+(defn compile-let [patterns&values body]
+  (let [src `(let-match ~patterns&values ...)
+        input (vec (take-nth 2 (rest patterns&values)))
+        true-case (partial succeed-inline src input)
+        false-case (fail-inline src input)
+        hast (let->hast patterns&values body true-case false-case)]
+    (compile-inline hast nil #{} identity)))
+
+(defmacro let-match [patterns&values & body]
+  (compile-let patterns&values body))
+
 ;; --- TESTS ---
 
 (deftest self-describing

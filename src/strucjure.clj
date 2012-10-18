@@ -204,27 +204,31 @@
                   (last->clj state (fn [_ _] unreachable) unreachable))]
     `(letfn [~@@thunks] ~(wrapper start))))
 
-(defn compile-view [case src bindings wrapper]
+(defn compile-view [patterns&values src bindings wrapper]
   (let [input (gensym "input")
         true-cont (gensym "true-cont")
         false-cont (gensym "false-cont")
         bindings (conj bindings true-cont false-cont)
         true-case (fn [output rest] `(~true-cont ~output ~rest))
         false-case `(~false-cont)
-        hast (case->hast case true-case false-case)
+        hast (case->hast patterns&values true-case false-case)
         wrapper (fn [start] (wrapper `(->View '~src (fn [~input ~true-cont ~false-cont] ~start))))]
     (compile-inline hast input bindings wrapper)))
 
-(defmacro view [& case]
-  (compile-view case `(view ~@case) #{} identity))
+(defmacro view [& patterns&values]
+  (compile-view patterns&values `(view ~@patterns&values) #{} identity))
 
-(defmacro defview [name & case]
+(defmacro defview [name & patterns&values]
   `(def ~name
-     ~(compile-view case `(defview ~name ~@case) #{} identity)))
+     ~(compile-view patterns&values
+                    `(defview ~name ~@patterns&values)
+                    #{} identity)))
 
-(defmacro defnview [name args & case]
+(defmacro defnview [name args & patterns&values]
   `(def ~name
-     ~(compile-view case `(defnview ~name ~args ~@case) (set args) (fn [start] `(fn [~@args] ~start)))))
+     ~(compile-view patterns&values
+                    `(defnview ~name ~args ~@patterns&values)
+                    (set args) (fn [start] `(fn [~@args] ~start)))))
 
 (defn recompile* [view-var]
   (alter-var-root view-var

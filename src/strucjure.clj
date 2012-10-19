@@ -32,14 +32,16 @@
     output
     (throw+ (PartialMatch. view input output rest))))
 
-(defrecord View [src fun]
+(defrecord View [name src fun]
   clojure.lang.IFn
   (invoke [this input]
-    (fun input (partial succeed src input) (partial fail src input)))
+    (fun input (partial succeed src input) (partial fail src input) nil nil))
   (invoke [this input true-cont]
-    (fun input true-cont (partial fail src input)))
+    (fun input true-cont (partial fail src input) nil nil))
   (invoke [this input true-cont false-cont]
-    (fun input true-cont false-cont)))
+    (fun input true-cont false-cont nil nil))
+  (invoke [this input true-cont false-cont pre-view post-view]
+    (fun input true-cont false-cont pre-view post-view)))
 
 (defn matches? [view input]
   (view input (fn [_ _] true) (fn [] false)))
@@ -99,7 +101,7 @@
 
 ;; Low-level AST forms correspond directly to clj code
 
-(defrecord State [input bindings thunks])
+(defrecord State [input bindings thunks pre-view post-view])
 
 (defprotocol LAST
   "A low-level Abstract Syntax Tree for a pattern."
@@ -136,9 +138,9 @@
 (defn replace-input-sym [input form]
   (clojure.walk/prewalk-replace {input-sym input} form))
 
-(defn compile-inline [hast input bindings wrapper]
+(defn compile-inline [hast input bindings pre-view post-view wrapper]
   (let [thunks (atom [])
-        state (->State input bindings thunks)
+        state (->State input bindings thunks pre-view post-view)
         unreachable ::unreachable ; this will only be reached if the hast has a branch without Succeed/Fail
         start (-> hast
                   hast->last
@@ -146,20 +148,32 @@
     `(letfn [~@@thunks] ~(wrapper start))))
 
 (defn compile-view
-  ([patterns&values src bindings wrapper]
-     (compile-view (gensym "input") patterns&values src bindings wrapper))
-  ([input patterns&values src bindings wrapper]
+  ([name patterns&values src bindings wrapper]
+     (compile-view (gensym "input") name patterns&values src bindings wrapper))
+  ([input name patterns&values src bindings wrapper]
      (let [true-cont (gensym "true-cont")
            false-cont (gensym "false-cont")
-           bindings (conj bindings input true-cont false-cont)
-           true-case (fn [output rest] `(~true-cont ~output ~rest))
+           pre-view (gensym "pre-view")
+           post-view (gensym "post-view")
+           bindings (conj bindings input true-cont false-cont pre-view post-view)
+           true-case (fn [output rest]
+                       `(let [output# (if ~post-view
+                                        (~post-view '~name ~output)
+                                        ~output)]
+                          (~true-cont output# ~rest)))
            false-case `(~false-cont)
            hast (case->hast patterns&values true-case false-case)
-           wrapper (fn [start] (wrapper `(->View '~src (fn [~input ~true-cont ~false-cont] ~start))))]
-       (compile-inline hast input bindings wrapper))))
+           wrapper (fn [start] (wrapper
+                               `(->View '~name '~src
+                                        (fn [~input ~true-cont ~false-cont ~pre-view ~post-view]
+                                          (let [~input (if ~pre-view
+                                                        (~pre-view '~name ~input)
+                                                        ~input)]
+                                            ~start)))))]
+       (compile-inline hast input bindings pre-view post-view wrapper))))
 
 (defmacro view [& patterns&values]
-  (compile-view patterns&values `(view ~@patterns&values) #{} identity))
+  (compile-view 'anon patterns&values `(view ~@patterns&values) #{} identity))
 
 ;; inserting ^:dynamic directly into a syntax-quote doesn't work, it seems to be applied at read-time
 (defn dynamic [symbol]
@@ -167,13 +181,13 @@
 
 (defmacro defview [name & patterns&values]
   `(def ~(dynamic name)
-     ~(compile-view patterns&values
+     ~(compile-view name patterns&values
                     `(defview ~name ~@patterns&values)
                     #{} identity)))
 
 (defmacro defnview [name args & patterns&values]
   `(def ~(dynamic name)
-     ~(compile-view patterns&values
+     ~(compile-view name patterns&values
                     `(defnview ~name ~args ~@patterns&values)
                     (set args) (fn [start] `(fn [~@args] ~start)))))
 
@@ -229,7 +243,7 @@
 ;; The pattern must consume the whole output
 (defrecord Import* [view pattern]
   LAST
-  (last->clj* [this {:keys [input bindings thunks] :as state} true-case false-case]
+  (last->clj* [this {:keys [input bindings thunks pre-view post-view] :as state} true-case false-case]
     (let [import (gensym "import")
           rest (gensym "rest")
           pattern-true-case (fn [_ new-bindings]
@@ -238,7 +252,7 @@
           view-true-case  `(fn [~import ~rest]
                              ~(last->clj pattern (assoc state :input import) pattern-true-case pattern-false-case))
           view-false-case `(fn [] ~pattern-false-case)]
-      `(~view ~input ~view-true-case ~view-false-case))))
+      `(~view ~input ~view-true-case ~view-false-case ~pre-view ~post-view))))
 
 ;; All patterns get the same input
 ;; All bindings are exported
@@ -654,7 +668,7 @@
                       (if (flat? value)
                         (clojure.walk/prewalk-replace {input value} start)
                         `(let [~input ~value] ~start)))]
-    (compile-inline hast input #{input} wrapper)))
+    (compile-inline hast input #{input} nil nil wrapper)))
 
 (defmacro match [value & patterns&values]
   (compile-match value patterns&values))
@@ -680,7 +694,7 @@
         true-case (partial succeed-inline src input)
         false-case (fail-inline src input)
         hast (let->hast patterns&values body true-case false-case)]
-    (compile-inline hast nil #{} identity)))
+    (compile-inline hast nil #{} nil nil identity)))
 
 (defmacro let-match [patterns&values & body]
   (compile-let patterns&values body))
@@ -698,29 +712,29 @@
         input (vec (take-nth 2 (rest patterns&values)))
         true-case (partial succeed-inline src input)
         hast (doseq->hast patterns&values body true-case)]
-    (compile-inline hast nil #{} identity)))
+    (compile-inline hast nil #{} nil nil identity)))
 
 (defmacro doseq-match [patterns&values & body]
   (compile-doseq patterns&values body))
 
-;; A degenerate view
-(defn compile-pattern [patterns src bindings wrapper]
+;; A degenerate view that returns its input on matching
+(defn compile-pattern [name patterns src bindings wrapper]
   (let [input (gensym "input")
         patterns&values (apply concat (for [pattern patterns] [pattern input]))]
-    (compile-view input patterns&values src bindings wrapper)))
+    (compile-view name input patterns&values src bindings wrapper)))
 
 (defmacro pattern [& patterns]
-  (compile-pattern patterns `(pattern ~@patterns) #{} identity))
+  (compile-pattern 'anon patterns `(pattern ~@patterns) #{} identity))
 
 (defmacro defpattern [name & patterns]
   `(def ~(dynamic name)
-     ~(compile-pattern patterns
+     ~(compile-pattern name patterns
                        `(defpattern ~name ~@patterns)
                        #{} identity)))
 
 (defmacro defnpattern [name args patterns]
   `(def ~(dynamic name)
-     ~(compile-pattern patterns
+     ~(compile-pattern name patterns
                        `(defnpattern ~name ~args ~@patterns)
                        (set args) (fn [start] `(fn [~@args] ~start)))))
 
@@ -737,7 +751,7 @@
 ;;       eg (binding [my-view (with-cache cache my-view)] ...)
 ;; WARNING: We record match failure before calling a view to break left recursion.
 ;;          This is not thread-safe by itself! Use only with thread-local bindings.
-(defn with-cache [{:keys [src fun]} cache]
+(defn with-cache [{:keys [name src fun]} cache]
   (let [cache-atom (atom cache)
         new-src `(with-cache ~src ~cache)]
     (letfn [(new-fun [input true-case false-case]
@@ -752,7 +766,7 @@
                            (swap! cache-atom clojure.core.cache/miss input [output rest])
                            (true-case output rest))
                          false-case))))]
-      (->View new-src new-fun))))
+      (->View name new-src new-fun))))
 
 (defn caching*
   ([view-vars body]

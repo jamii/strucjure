@@ -32,16 +32,19 @@
     output
     (throw+ (PartialMatch. view input output rest))))
 
+(defn null-pre-view [[name form]] form)
+(defn null-post-view [[name form]] form)
+
 (defrecord View [name src fun]
   clojure.lang.IFn
   (invoke [this input]
-    (fun input (partial succeed src input) (partial fail src input) nil nil))
-  (invoke [this input true-cont]
-    (fun input true-cont (partial fail src input) nil nil))
-  (invoke [this input true-cont false-cont]
-    (fun input true-cont false-cont nil nil))
-  (invoke [this input true-cont false-cont pre-view post-view]
-    (fun input true-cont false-cont pre-view post-view)))
+    (.invoke this input {}))
+  (invoke [this input opts]
+    (fun input
+         (get opts :pre-view null-pre-view)
+         (get opts :post-view null-post-view)
+         (get opts :true-cont (partial succeed src input))
+         (get opts :false-cont (partial fail src input)))))
 
 (defn matches? [view input]
   (view input (fn [_ _] true) (fn [] false)))
@@ -157,18 +160,13 @@
            post-view (gensym "post-view")
            bindings (conj bindings input true-cont false-cont pre-view post-view)
            true-case (fn [output rest]
-                       `(let [output# (if ~post-view
-                                        (~post-view '~name ~output)
-                                        ~output)]
-                          (~true-cont output# ~rest)))
+                       `(~true-cont (~post-view ['~name ~output]) ~rest))
            false-case `(~false-cont)
            hast (case->hast patterns&values true-case false-case)
            wrapper (fn [start] (wrapper
                                `(->View '~name '~src
-                                        (fn [~input ~true-cont ~false-cont ~pre-view ~post-view]
-                                          (let [~input (if ~pre-view
-                                                        (~pre-view '~name ~input)
-                                                        ~input)]
+                                        (fn [~input ~pre-view ~post-view ~true-cont ~false-cont]
+                                          (let [~input (~pre-view ['~name ~input])]
                                             ~start)))))]
        (compile-inline hast input bindings pre-view post-view wrapper))))
 
@@ -252,7 +250,7 @@
           view-true-case  `(fn [~import ~rest]
                              ~(last->clj pattern (assoc state :input import) pattern-true-case pattern-false-case))
           view-false-case `(fn [] ~pattern-false-case)]
-      `(~view ~input ~view-true-case ~view-false-case ~pre-view ~post-view))))
+      `((.fun ~view) ~input ~pre-view ~post-view ~view-true-case ~view-false-case))))
 
 ;; All patterns get the same input
 ;; All bindings are exported
@@ -754,14 +752,14 @@
 (defn with-cache [{:keys [name src fun]} cache]
   (let [cache-atom (atom cache)
         new-src `(with-cache ~src ~cache)]
-    (letfn [(new-fun [input true-case false-case]
+    (letfn [(new-fun [input pre-view post-view true-case false-case]
               (if (clojure.core.cache/has? @cache-atom input)
                 (do (swap! cache-atom clojure.core.cache/hit input)
                     (if-let [[output rest] (clojure.core.cache/lookup @cache-atom input)]
                       (true-case output rest)
                       (false-case)))
                 (do (swap! cache-atom clojure.core.cache/miss input nil) ; fail if we recurse back to this input
-                    (fun input
+                    (fun input pre-view post-view
                          (fn [output rest]
                            (swap! cache-atom clojure.core.cache/miss input [output rest])
                            (true-case output rest))

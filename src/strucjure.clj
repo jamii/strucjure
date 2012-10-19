@@ -724,28 +724,27 @@
                        `(defnpattern ~name ~args ~@patterns)
                        (set args) (fn [start] `(fn [~@args] ~start)))))
 
+;; --- MEMOISATION ---
 
-;; --- GENERIC TRAVERSALS ---
-
-;; memoisation
-;; NOTE: to memoise recursive calls you need to rebind the var
+;; NOTE: To memoise recursive calls you need to rebind the var
 ;;       eg (binding [my-view (with-cache cache my-view)] ...)
+;; WARNING: We record match failure before calling a view to break left recursion.
+;;          This is not thread-safe! Don't use with-cache by itself - use caching
 (defn with-cache [cache {:keys [src fun]}]
   (let [cache-atom (atom cache)
-        new-src `(with-cache* ~cache ~src)] ; TODO: this produces weird source for defnview
+        new-src `(with-cache* ~cache ~src)] ; TODO this produces weird source for defnview
     (letfn [(new-fun [input true-case false-case]
               (if (clojure.core.cache/has? @cache-atom input)
                 (do (swap! cache-atom clojure.core.cache/hit input)
                     (if-let [[output rest] (clojure.core.cache/lookup @cache-atom input)]
                       (true-case output rest)
                       (false-case)))
-                (fun input
-                     (fn [output rest]
-                       (swap! cache-atom clojure.core.cache/miss input [output rest])
-                       (true-case output rest))
-                     (fn []
-                       (swap! cache-atom clojure.core.cache/miss input nil)
-                       false-case))))]
+                (do (swap! cache-atom clojure.core.cache/miss input nil) ; fail if we recurse back to this input
+                    (fun input
+                         (fn [output rest]
+                           (swap! cache-atom clojure.core.cache/miss input [output rest])
+                           (true-case output rest))
+                         false-case))))]
       (->View new-src new-fun))))
 
 (defn binding* [vars&values body]

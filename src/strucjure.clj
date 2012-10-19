@@ -2,7 +2,8 @@
   (:use clojure.test
         [slingshot.slingshot :only [throw+ try+]])
   (:require clojure.set
-            clojure.walk))
+            clojure.walk
+            clojure.core.cache))
 
 ;; PEG parser / pattern matcher
 ;; (originally based on matchure)
@@ -722,6 +723,39 @@
      ~(compile-pattern patterns
                        `(defnpattern ~name ~args ~@patterns)
                        (set args) (fn [start] `(fn [~@args] ~start)))))
+
+
+;; --- GENERIC TRAVERSALS ---
+
+;; memoisation
+;; NOTE: to memoise recursive calls you need to rebind the var
+;;       eg (binding [my-view (with-cache cache my-view)] ...)
+(defn with-cache [cache {:keys [src fun]}]
+  (let [cache-atom (atom cache)
+        new-src `(with-cache* ~cache ~src)] ; TODO: this produces weird source for defnview
+    (letfn [(new-fun [input true-case false-case]
+              (if (clojure.core.cache/has? @cache-atom input)
+                (do (swap! cache-atom clojure.core.cache/hit input)
+                    (if-let [[output rest] (clojure.core.cache/lookup @cache-atom input)]
+                      (true-case output rest)
+                      (false-case)))
+                (fun input
+                     (fn [output rest]
+                       (swap! cache-atom clojure.core.cache/miss input [output rest])
+                       (true-case output rest))
+                     (fn []
+                       (swap! cache-atom clojure.core.cache/miss input nil)
+                       false-case))))]
+      (->View new-src new-fun))))
+
+(defmacro caching [cache views & body]
+  (let [evaled-cache (gensym "cache")]
+    `(let [~evaled-cache ~cache]
+       (binding
+           ~(vec (apply concat
+                        (for [view views]
+                          `[~view (with-cache ~evaled-cache ~view)])))
+         ~@body))))
 
 ;; --- TESTS ---
 

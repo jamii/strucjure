@@ -726,13 +726,20 @@
 
 ;; --- MEMOISATION ---
 
+(defn binding* [vars&values body]
+  (push-thread-bindings (apply hash-map vars&values))
+  (try
+    (body)
+    (finally
+      (pop-thread-bindings))))
+
 ;; NOTE: To memoise recursive calls you need to rebind the var
 ;;       eg (binding [my-view (with-cache cache my-view)] ...)
 ;; WARNING: We record match failure before calling a view to break left recursion.
-;;          This is not thread-safe! Don't use with-cache by itself - use caching
-(defn with-cache [cache {:keys [src fun]}]
+;;          This is not thread-safe by itself! Use only with thread-local bindings.
+(defn with-cache [{:keys [src fun]} cache]
   (let [cache-atom (atom cache)
-        new-src `(with-cache* ~cache ~src)] ; TODO this produces weird source for defnview
+        new-src `(with-cache ~src ~cache)]
     (letfn [(new-fun [input true-case false-case]
               (if (clojure.core.cache/has? @cache-atom input)
                 (do (swap! cache-atom clojure.core.cache/hit input)
@@ -747,18 +754,57 @@
                          false-case))))]
       (->View new-src new-fun))))
 
-(defn binding* [vars&values body]
-  (push-thread-bindings (apply hash-map vars&values))
-  (try
-    (body)
-    (finally
-      (pop-thread-bindings))))
+(defn caching*
+  ([view-vars body]
+     (caching* (clojure.core.cache/basic-cache-factory {}) view-vars body))
+  ([cache view-vars body]
+      (binding* (apply concat
+                       (for [view-var view-vars]
+                         [view-var (with-cache @view-var cache)]))
+                body)))
 
-(defn caching [cache view-vars body]
-  (binding* (apply concat
-                   (for [view-var view-vars]
-                     [view-var (with-cache cache @view-var)]))
-            body))
+(defmacro caching
+  ([views body]
+     `(caching* ~(vec (map resolve views)) (fn [] ~body)))
+  ([cache views body]
+     `(caching* ~cache ~(vec (map resolve views)) (fn [] ~body))))
+
+;; --- GENERIC TRAVERSALS ---
+
+;; a view that behaves like walk
+(defview tour
+  (and clojure.lang.IRecord ?record [& ((zero-or-more tour) ?vals)])
+  (clojure.lang.Reflector/invokeConstructor (class record) (to-array vals))
+
+  (and list? [& ((zero-or-more tour) ?vals)])
+  (apply list vals)
+
+  (and clojure.lang.MapEntry [& ((zero-or-more tour) ?vals)])
+  (vec vals)
+
+  (and seq? [& ((zero-or-more tour) ?vals)])
+  vals
+
+  (and coll? ?collection [& ((zero-or-more tour) ?vals)])
+  (into (empty collection) vals)
+
+  ?other
+  other)
+
+(defn collecting* [view-vars body]
+  (let [acc (atom ())]
+    (binding* (apply concat
+                     (for [view-var view-vars]
+                       (let [old-view @view-var]
+                         [view-var (view (old-view ?output)
+                                         (do (swap! acc conj output)
+                                             output))])))
+              (fn []
+                (body)
+                @acc))))
+
+(defmacro collecting [views & body]
+  `(collecting* ~(vec (map resolve views)) (fn [] ~@body)))
 
 ;; --- TESTS ---
 

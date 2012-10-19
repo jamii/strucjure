@@ -160,14 +160,18 @@
 (defmacro view [& patterns&values]
   (compile-view patterns&values `(view ~@patterns&values) #{} identity))
 
+;; inserting ^:dynamic directly into a syntax-quote doesn't work, it seems to be applied at read-time
+(defn dynamic [symbol]
+  ^:dynamic symbol)
+
 (defmacro defview [name & patterns&values]
-  `(def ^:dynamic ~name
+  `(def ~(dynamic name)
      ~(compile-view patterns&values
                     `(defview ~name ~@patterns&values)
                     #{} identity)))
 
 (defmacro defnview [name args & patterns&values]
-  `(def ^:dynamic ~name
+  `(def ~(dynamic name)
      ~(compile-view patterns&values
                     `(defnview ~name ~args ~@patterns&values)
                     (set args) (fn [start] `(fn [~@args] ~start)))))

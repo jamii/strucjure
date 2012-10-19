@@ -702,6 +702,27 @@
 (defmacro doseq-match [patterns&values & body]
   (compile-doseq patterns&values body))
 
+;; A degenerate view
+(defn compile-pattern [patterns src bindings wrapper]
+  (let [input (gensym "input")
+        patterns&values (apply concat (for [pattern patterns] [pattern input]))]
+    (compile-view input patterns&values src bindings wrapper)))
+
+(defmacro pattern [& patterns]
+  (compile-pattern patterns `(pattern ~@patterns) #{} identity))
+
+(defmacro defpattern [name & patterns]
+  `(def ~(dynamic name)
+     ~(compile-pattern patterns
+                       `(defpattern ~name ~@patterns)
+                       #{} identity)))
+
+(defmacro defnpattern [name args patterns]
+  `(def ~(dynamic name)
+     ~(compile-pattern patterns
+                       `(defnpattern ~name ~args ~@patterns)
+                       (set args) (fn [start] `(fn [~@args] ~start)))))
+
 ;; --- TESTS ---
 
 (deftest self-describing

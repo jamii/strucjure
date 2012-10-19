@@ -162,7 +162,7 @@
 
 ;; inserting ^:dynamic directly into a syntax-quote doesn't work, it seems to be applied at read-time
 (defn dynamic [symbol]
-  ^:dynamic symbol)
+  (vary-meta symbol assoc :dynamic true))
 
 (defmacro defview [name & patterns&values]
   `(def ~(dynamic name)

@@ -748,14 +748,18 @@
                        false-case))))]
       (->View new-src new-fun))))
 
-(defmacro caching [cache views & body]
-  (let [evaled-cache (gensym "cache")]
-    `(let [~evaled-cache ~cache]
-       (binding
-           ~(vec (apply concat
-                        (for [view views]
-                          `[~view (with-cache ~evaled-cache ~view)])))
-         ~@body))))
+(defn binding* [vars&values body]
+  (push-thread-bindings (apply hash-map vars&values))
+  (try
+    (body)
+    (finally
+      (pop-thread-bindings))))
+
+(defn caching [cache view-vars body]
+  (binding* (apply concat
+                   (for [view-var view-vars]
+                     [view-var (with-cache cache @view-var)]))
+            body))
 
 ;; --- TESTS ---
 

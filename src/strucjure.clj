@@ -803,20 +803,20 @@
   ?other
   other)
 
-(defn collecting* [view-vars body]
-  (let [acc (atom ())]
-    (binding* (apply concat
-                     (for [view-var view-vars]
-                       (let [old-view @view-var]
-                         [view-var (view (old-view ?output)
-                                         (do (swap! acc conj output)
-                                             output))])))
-              (fn []
-                (body)
-                @acc))))
+(defn pretour [f form]
+  (tour form {:pre-view (fn [[_ inner-form]] (f inner-form))}))
 
-(defmacro collecting [views & body]
-  `(collecting* ~(vec (map resolve views)) (fn [] ~@body)))
+(defn posttour [f form]
+  (tour form {:post-view (fn [[_ inner-form]] (f inner-form))}))
+
+(defn collect [names view input]
+  (let [acc (atom ())
+        post-view (fn [[name form]]
+                    (when (names name)
+                      (swap! acc conj form))
+                    form)]
+    (view input {:post-view post-view})
+    @acc))
 
 ;; --- TESTS ---
 

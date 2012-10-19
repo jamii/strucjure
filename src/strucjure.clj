@@ -174,18 +174,21 @@
   (compile-view 'anon patterns&values `(view ~@patterns&values) #{} identity))
 
 ;; inserting ^:dynamic directly into a syntax-quote doesn't work, it seems to be applied at read-time
-(defn dynamic [symbol]
-  (vary-meta symbol assoc :dynamic true))
+(defn dynamic [sym]
+  (vary-meta sym assoc :dynamic true))
+
+(defn namespaced [sym]
+  (symbol (str *ns* "/" sym)))
 
 (defmacro defview [name & patterns&values]
   `(def ~(dynamic name)
-     ~(compile-view name patterns&values
+     ~(compile-view (namespaced name) patterns&values
                     `(defview ~name ~@patterns&values)
                     #{} identity)))
 
 (defmacro defnview [name args & patterns&values]
   `(def ~(dynamic name)
-     ~(compile-view name patterns&values
+     ~(compile-view (namespaced name) patterns&values
                     `(defnview ~name ~args ~@patterns&values)
                     (set args) (fn [start] `(fn [~@args] ~start)))))
 
@@ -726,13 +729,13 @@
 
 (defmacro defpattern [name & patterns]
   `(def ~(dynamic name)
-     ~(compile-pattern name patterns
+     ~(compile-pattern (namespaced name) patterns
                        `(defpattern ~name ~@patterns)
                        #{} identity)))
 
 (defmacro defnpattern [name args patterns]
   `(def ~(dynamic name)
-     ~(compile-pattern name patterns
+     ~(compile-pattern (namespaced name) patterns
                        `(defnpattern ~name ~args ~@patterns)
                        (set args) (fn [start] `(fn [~@args] ~start)))))
 

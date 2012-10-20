@@ -152,9 +152,8 @@
 
 (defn compile-view
   ([name patterns&values src bindings wrapper]
-     (compile-view (gensym "input") name patterns&values src bindings wrapper))
-  ([input name patterns&values src bindings wrapper]
-     (let [true-cont (gensym "true-cont")
+     (let [input (gensym "input")
+           true-cont (gensym "true-cont")
            false-cont (gensym "false-cont")
            pre-view (gensym "pre-view")
            post-view (gensym "post-view")
@@ -713,30 +712,30 @@
         input (vec (take-nth 2 (rest patterns&values)))
         true-case (partial succeed-inline src input)
         hast (doseq->hast patterns&values body true-case)]
-    (compile-inline hast nil #{} nil nil identity)))
+    (compile-inline hast nil #{} `null-pre-view `null-post-view identity)))
 
 (defmacro doseq-match [patterns&values & body]
   (compile-doseq patterns&values body))
 
 ;; A degenerate view that returns its input on matching
-(defn compile-pattern [name patterns src bindings wrapper]
-  (let [input (gensym "input")
-        patterns&values (apply concat (for [pattern patterns] [pattern input]))]
-    (compile-view name input patterns&values src bindings wrapper)))
+(defn compile-pattern [name pattern src bindings wrapper]
+  (let [binding (gensym "?binding")
+        patterns&values [`(~'and ~binding ~pattern) (binding-name binding)]]
+    (compile-view name patterns&values src bindings wrapper)))
 
-(defmacro pattern [& patterns]
-  (compile-pattern 'anon patterns `(pattern ~@patterns) #{} identity))
+(defmacro pattern [pat]
+  (compile-pattern 'anon pat `(pattern ~pat) #{} identity))
 
-(defmacro defpattern [name & patterns]
+(defmacro defpattern [name pat]
   `(def ~(dynamic name)
-     ~(compile-pattern (namespaced name) patterns
-                       `(defpattern ~name ~@patterns)
+     ~(compile-pattern (namespaced name) pat
+                       `(defpattern ~name ~pat)
                        #{} identity)))
 
-(defmacro defnpattern [name args patterns]
+(defmacro defnpattern [name args pat]
   `(def ~(dynamic name)
-     ~(compile-pattern (namespaced name) patterns
-                       `(defnpattern ~name ~args ~@patterns)
+     ~(compile-pattern (namespaced name) pat
+                       `(defnpattern ~name ~args ~pat)
                        (set args) (fn [start] `(fn [~@args] ~start)))))
 
 ;; --- MEMOISATION ---

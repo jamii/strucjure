@@ -675,7 +675,7 @@
                       (if (flat? value)
                         (clojure.walk/prewalk-replace {input value} start)
                         `(let [~input ~value] ~start)))]
-    (compile-inline hast input #{input} nil nil wrapper)))
+    (compile-inline hast input #{input} `null-pre-view `null-post-view wrapper)))
 
 (defmacro match [value & patterns&values]
   (compile-match value patterns&values))
@@ -701,7 +701,7 @@
         true-case (partial succeed-inline src input)
         false-case (fail-inline src input)
         hast (let->hast patterns&values body true-case false-case)]
-    (compile-inline hast nil #{} nil nil identity)))
+    (compile-inline hast nil #{} `null-pre-view `null-post-view identity)))
 
 (defmacro let-match [patterns&values & body]
   (compile-let patterns&values body))

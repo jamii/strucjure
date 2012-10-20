@@ -247,10 +247,13 @@
     (let [import (gensym "import")
           rest (gensym "rest")
           pattern-true-case (fn [_ new-bindings]
-                              (true-case rest (conj new-bindings rest)))
+                              (true-case rest new-bindings))
           pattern-false-case (thunkify thunks (conj bindings input) false-case)
           view-true-case  `(fn [~import ~rest]
-                             ~(last->clj pattern (assoc state :input import) pattern-true-case pattern-false-case))
+                             ~(last->clj pattern (assoc state
+                                                   :input import
+                                                   :bindings (conj bindings import rest))
+                                         pattern-true-case pattern-false-case))
           view-false-case `(fn [] ~pattern-false-case)]
       `((.fun ~view) ~input ~pre-view ~post-view ~view-true-case ~view-false-case))))
 

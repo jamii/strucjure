@@ -601,6 +601,10 @@
 (defview key&pattern->hast
   [?key (pattern->hast ?pattern)] [key pattern])
 
+(defview import->hast
+  [?view (pattern->hast ?pattern)] (->Import view pattern)
+  [?view & (import->hast ?import)] (->Import view import))
+
 (defview seq-pattern->hast
   ;; & PATTERNS
   (prefix '& (pattern->hast ?pattern)) pattern
@@ -647,7 +651,7 @@
   (and symbol? ?variable) (->Literal variable)
 
   ;; IMPORTED VIEWS
-  (and seq? [?view (pattern->hast ?pattern)]) (->Import view pattern))
+  (and seq? (import->hast ?import)) import)
 
 ;; --- MATCH FORMS ---
 

@@ -13,10 +13,10 @@
 ;; A view is constructed from a list of [pattern value] pairs, where the value forms have access to the patterns bindings
 
 ;; --- TODO ---
-;; better error/failure reporting
+;; better error/failure reporting (on-view would help with debugging)
 ;; provide syntax for matching record literals #user.Foo{} and set literals
 ;; allow optional keys?
-;; think about extensibility and memoization
+;; think about extensibility - can copy graph library to make collection of late-bound views
 ;; might want to truncate input/output/rest in error messages
 
 ;; --- VIEWS ---

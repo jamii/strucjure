@@ -13,11 +13,16 @@
 ;; A view is constructed from a list of [pattern value] pairs, where the value forms have access to the patterns bindings
 
 ;; --- TODO ---
-;; better error/failure reporting (on-view would help with debugging)
+;; better error/failure reporting
+;;   on-view would help with debugging
+;;   put hast in view so people can see how its parsing
 ;; provide syntax for matching record literals #user.Foo{} and set literals
 ;; allow optional keys?
 ;; think about extensibility - can copy graph library to make collection of late-bound views
 ;; might want to truncate input/output/rest in error messages
+;; having bindings available in import statements makes grammars context-sensitive
+;;   as a result, can't reason about grammars much without running them
+;;   consider thunking imports with zero scope
 
 ;; --- VIEWS ---
 
@@ -829,6 +834,97 @@
 
 ;; --- TESTS ---
 
-(deftest self-describing
+(deftest self-describing-test
   (is (macroexpand-1 (:src seq-pattern->hast)))
   (is (macroexpand-1 (:src pattern->hast))))
+
+(defnview tokenise* [sep]
+  []
+  (list ())
+
+  [& (sep _) & ((tokenise* sep) ?rest)]
+  (cons () rest)
+
+  [?char & ((tokenise* sep) [?first & ?rest])]
+  (cons (cons char first) rest))
+
+(defnview tokenise [sep]
+  ((tokenise* sep) ?tokens)
+  (filter seq tokens))
+
+(defpattern space \space)
+(defpattern newline \newline)
+(defpattern not-space (not \space))
+(defpattern not-newline (not \newline))
+
+(defview line
+  (prefix & ((zero-or-more not-newline) ?line) & ((optional newline) _))
+  line)
+
+(defview indented-line
+  (prefix & ((one-or-more space) _) & (line ?line))
+  line)
+
+(defpattern exception-chars
+  (or \.
+      #(<= (int \a) (int %) (int \z))
+      #(<= (int \A) (int %) (int \Z))))
+
+(defview result
+  [\E \x \c \e \p \t \i \o \n \I \n \f \o \space
+   \t \h \r \o \w \+ \: \space
+   \# & ((one-or-more exception-chars) ?exception)
+   & _]
+  [:throws (resolve (symbol (apply str exception)))]
+
+  ?data
+  [:returns (read-string (apply str data))])
+
+(defview example
+  [& (line ?input-first)
+   & ((zero-or-more-prefix indented-line) ?input-rest)
+   & ((tokenise space) ?output-lines)]
+  {:input (apply str (flatten (interpose \space (cons input-first input-rest))))
+   :prints (apply str (flatten (interpose \newline (butlast output-lines))) \newline)
+   :result (result (last output-lines))})
+
+(defpattern prompt
+  (prefix \u \s \e \r \> \space))
+
+(defview code-block-inner
+  (and (prompt _)
+       ((tokenise prompt) ?chunks))
+  (map example chunks)
+
+  _ ;; TODO would be nice to just eval other blocks and check for exceptions
+  nil)
+
+(defview code-block
+  [\c \l \o \j \u \r \e \newline & (code-block-inner ?result)]
+  result)
+
+(defpattern code-delim
+  (prefix \` \` \`))
+
+(defview readme
+  ((tokenise code-delim) ?chunks)
+  (apply concat (map code-block (take-nth 2 (rest chunks)))))
+
+(defn run-example [{:keys [input prints result]}]
+  (match result
+         [:returns ?value]
+         (do
+           (is (= value (eval (read-string input))))
+           (is (= prints (with-out-str (eval (read-string input))))))
+
+         [:throws ?exception]
+         (do
+           (is (try+ (eval (read-string input))
+                     false
+                     (catch (instance? exception %) _ true)))
+           (is (= prints (with-out-str
+                           (try+ (eval (read-string input))
+                                 (catch (instance? exception %) _ nil))))))))
+
+(deftest run-readme
+  (map run-example (readme (seq (slurp "README.md")))))

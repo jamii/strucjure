@@ -1,5 +1,5 @@
 (ns strucjure.util
-  (:require clojure.tools.macro))
+  (:require clojure.set))
 
 ;; in user code in guards the input is bound to %
 (def input-sym '%)

@@ -40,7 +40,7 @@
 (defrecord Ignore []
   AST
   (with-scope [this scope]
-    this)
+    [`(->Ignore) scope])
   Pattern
   (run* [this input bindings]
     [nil bindings]))
@@ -118,7 +118,7 @@
 (defrecord Regex [regex]
   AST
   (with-scope [this scope]
-    this)
+    `(->Regex ~regex))
   Pattern
   (run* [this input bindings]
     (when-let [_ (re-find regex input)]
@@ -140,7 +140,7 @@
     (pass-scope (fn [pattern] `(->Not ~pattern)) pattern scope))
   Pattern
   (run* [this input bindings]
-    (when-let [result (run* pattern input bindings)]
+    (if-let [result (run* pattern input bindings)]
       nil
       [nil bindings])))
 
@@ -167,14 +167,15 @@
     (chain-scope (fn [patterns] `(->And ~patterns)) patterns scope))
   Pattern
   (run* [this input bindings]
-    (let [[pattern & patterns-rest] patterns]
+    (if-let [[pattern & patterns-rest] (seq patterns)]
       (loop [pattern pattern
              patterns patterns
              bindings bindings]
         (when-let [[remaining new-bindings :as result] (run* pattern input bindings)]
           (if-let [[pattern & patterns] patterns]
             (recur pattern patterns new-bindings)
-            result))))))
+            result)))
+      [input bindings])))
 
 (defrecord Chain [patterns]
   AST
@@ -182,7 +183,7 @@
     (chain-scope (fn [patterns] `(->Chain ~patterns)) patterns scope))
   Pattern
   (run* [this input bindings]
-    (let [[pattern & patterns] patterns]
+    (if-let [[pattern & patterns] (seq patterns)]
       (loop [pattern pattern
              patterns patterns
              input input
@@ -190,7 +191,8 @@
         (when-let [[remaining new-bindings :as result] (run* pattern input bindings)]
           (if-let [[pattern & patterns] patterns]
             (recur pattern patterns remaining new-bindings)
-            result))))))
+            result)))
+      [input bindings])))
 
 (defrecord Seq [pattern]
   AST

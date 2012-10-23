@@ -5,6 +5,5 @@
             :url "http://www.gnu.org/licenses/lgpl.html"}
   :dependencies [[org.clojure/clojure "1.4.0"]
                  [slingshot "0.10.3"]
-                 [org.clojure/core.cache "0.6.2"]
-                 [org.clojure/tools.macro "0.1.1"]]
+                 [org.clojure/core.cache "0.6.2"]]
   :profiles {:dev {:dependencies [[org.clojure/tools.trace "0.7.3"]]}})

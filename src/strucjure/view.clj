@@ -33,8 +33,9 @@
   strucjure.pattern.Pattern
   (run* [this input bindings]
     (when-let [[remaining output] (run* (view-fun) input)]
-      (when (nil? remaining)
-        (pattern/run* pattern output bindings)))))
+      (when-let [[remaining* new-bindings] (pattern/run* pattern output bindings)]
+        (when (nil? remaining*)
+          [remaining new-bindings])))))
 
 (defrecord Match [pattern result-fun]
   strucjure.view.View
@@ -77,13 +78,13 @@
            (instance? clojure.lang.Seqable input))
       (loop [elems (seq input)
              outputs nil]
-        (if-let [[elem elems] elems]
+        (if-let [[elem & elems] elems]
           (if-let [[remaining output] (run* view elem)]
             (if (nil? remaining)
               (recur elems (cons output outputs))
-              [elems (reverse outputs)])
-            [elems (reverse outputs)])
-          [elems (reverse outputs)])))))
+              [(cons elem elems) (reverse outputs)])
+            [(cons elem elems) (reverse outputs)])
+          [nil (reverse outputs)])))))
 
 (defrecord ZeroOrMorePrefix [view]
   View

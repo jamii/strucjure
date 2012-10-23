@@ -1,4 +1,5 @@
-(ns strucjure.util)
+(ns strucjure.util
+  (:require clojure.tools.macro))
 
 ;; in user code in guards the input is bound to %
 (def input-sym '%)
@@ -14,7 +15,7 @@
         bindings-sym (gensym "bindings")
         bindings (for [symbol scope
                        :when (contains? used symbol)]
-                   [symbol `(get ~bindings-sym '~symbol)])])
-  `(fn [~input-sym ~bindings-sym]
-     (let [~@(apply concat bindings)]
-       ~src)))
+                   [symbol `(get ~bindings-sym '~symbol)])]
+    `(fn [~input-sym ~bindings-sym]
+       (let [~@(apply concat bindings)]
+         ~src))))

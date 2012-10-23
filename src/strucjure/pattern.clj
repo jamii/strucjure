@@ -4,7 +4,7 @@
 (defprotocol AST
   "An Abstract Syntax Tree for a pattern"
   (with-scope [this scope]
-    "Compile the pattern ast into a pattern. Return [pattern new-scope]."))
+    "Compile the pattern ast into a pattern. Return [pattern-code new-scope]."))
 
  (defprotocol Pattern
   "A pattern takes an input and either fails or consumes some/all of the input and returns a set of bindings"
@@ -15,49 +15,54 @@
   (run* pattern input {}))
 
 (defn pass-scope [constructor pattern scope]
-  (let [[new-pattern new-scope] (with-scope pattern)]
-    [(constructor new-pattern) new-scope]))
+  (let [[new-pattern new-scope] (with-scope pattern scope)]
+   [(constructor new-pattern) new-scope]))
 
 (defn chain-scope [constructor patterns scope]
   (let [chained-scope (atom scope)
         with-chained-scope (fn [pattern]
-                             (let [[new-pattern new-scope] (with-scope pattern scope)]
+                             (let [[new-pattern new-scope] (with-scope pattern @chained-scope)]
                                (compare-and-set! chained-scope @chained-scope new-scope)
-                               new-pattern))]
-    [(constructor (map with-chained-scope patterns)) @chained-scope]))
+                               new-pattern))
+        new-pattern (constructor (vec (map with-chained-scope patterns)))]
+    [new-pattern @chained-scope]))
 
 (defrecord Literal [value]
   AST
   (with-scope [this scope]
-    this)
+    [`(->Literal ~value) scope])
   Pattern
   (run* [this input bindings]
     (if (= input value)
       [nil bindings]
       nil)))
 
-(defrecord Guard* [src]
+(defrecord Ignore []
   AST
   (with-scope [this scope]
-    (->Guard (eval (util/src-with-scope src scope)))))
+    this)
+  Pattern
+  (run* [this input bindings]
+    [nil bindings]))
 
 (defrecord Guard [fun]
+  AST
+  (with-scope [this scope]
+    [`(->Guard ~(util/src-with-scope fun scope)) scope])
   Pattern
   (run* [this input bindings]
     (if (fun input bindings)
       [nil bindings]
       nil)))
 
-(defrecord Bind* [symbol]
+(defrecord Bind [symbol]
   AST
   (with-scope [this scope]
     (if (contains? scope symbol)
       ;; if already bound, test for equality
       (with-scope (->Guard `(= ~symbol ~util/input-sym)) scope)
       ;; otherwise bind symbol
-      (->Bind symbol))))
-
-(defrecord Bind [symbol]
+      [`(->Bind '~symbol) (conj scope symbol)]))
   Pattern
   (run* [this input bindings]
     [nil (assoc bindings symbol input)]))
@@ -65,19 +70,19 @@
 (defrecord Head [pattern]
   AST
   (with-scope [this scope]
-    (pass-scope ->Head pattern scope))
+    (pass-scope (fn [pattern] `(->Head ~pattern)) pattern scope))
   Pattern
   (run* [this input bindings]
     (when-let [[head & tail] input]
-      (when-let [[remaining _ :as result] (run* pattern input bindings)]
+      (when-let [[remaining new-bindings :as result] (run* pattern head bindings)]
         (when (nil? remaining)
-          remaining)))))
+          [tail new-bindings])))))
 
 (defrecord Map [keys&patterns]
   AST
   (with-scope [this scope]
     (chain-scope
-     #(->Map (zip-map (map first keys&patterns) %))
+     (fn [patterns] `(->Map (zip-map ~(map first keys&patterns) ~patterns)))
      (map second keys&patterns)
      scope))
   Pattern
@@ -96,7 +101,7 @@
 (defrecord Record [class-name patterns]
   AST
   (with-scope [this scope]
-    (chain-scope #(->Constructor constructor) patterns scope))
+    (chain-scope (fn [patterns] `(->Record ~class-name ~patterns)) patterns scope))
   Pattern
   (run* [this input bindings]
     (when (instance? class-name input)
@@ -105,28 +110,37 @@
              bindings bindings]
         (if-let [[pattern & patterns] patterns]
           (when-let [[arg & args] args]
-            (when-let [[remaining & new-bindings] (run* pattern input-head bindings)]
+            (when-let [[remaining & new-bindings] (run* pattern arg bindings)]
               (when (nil? remaining)
                 (recur patterns args new-bindings))))
           [nil bindings])))))
 
+(defrecord Regex [regex]
+  AST
+  (with-scope [this scope]
+    this)
+  Pattern
+  (run* [this input bindings]
+    (when-let [_ (re-find regex input)]
+      [nil bindings])))
+
 (defrecord Total [pattern]
   AST
   (with-scope [this scope]
-    (pass-scope ->Total pattern scope))
+    (pass-scope (fn [pattern] `(->Total ~pattern)) pattern scope))
   Pattern
   (run* [this input bindings]
-    (when-let [[remaining _ :as result] (run* pattern scope bindings)]
+    (when-let [[remaining _ :as result] (run* pattern input bindings)]
       (when (nil? remaining)
         result))))
 
 (defrecord Not [pattern]
   AST
   (with-scope [this scope]
-    (pass-scope ->Not pattern scope))
+    (pass-scope (fn [pattern] `(->Not ~pattern)) pattern scope))
   Pattern
   (run* [this input bindings]
-    (when-let [result (run* pattern scope bindings)]
+    (when-let [result (run* pattern input bindings)]
       nil
       [nil bindings])))
 
@@ -138,7 +152,7 @@
           new-scopes (map second new-patterns&new-scopes)
           new-scope (first new-scopes)]
       (assert (every? #(= new-scope %) new-scopes) "All sub-patterns of an 'or' pattern must have the same bindings")
-      [(->Or new-patterns) new-scope]))
+      [`(->Or ~(vec new-patterns)) new-scope]))
   Pattern
   (run* [this input bindings]
     (loop [patterns patterns]
@@ -150,7 +164,7 @@
 (defrecord And [patterns]
   AST
   (with-scope [this scope]
-    (chain-scope ->And patterns scope))
+    (chain-scope (fn [patterns] `(->And ~patterns)) patterns scope))
   Pattern
   (run* [this input bindings]
     (let [[pattern & patterns-rest] patterns]
@@ -165,10 +179,10 @@
 (defrecord Chain [patterns]
   AST
   (with-scope [this scope]
-    (chain-scope ->Or patterns scope))
+    (chain-scope (fn [patterns] `(->Chain ~patterns)) patterns scope))
   Pattern
   (run* [this input bindings]
-    (let [[pattern & patterns-rest] patterns]
+    (let [[pattern & patterns] patterns]
       (loop [pattern pattern
              patterns patterns
              input input
@@ -181,7 +195,7 @@
 (defrecord Seq [pattern]
   AST
   (with-scope [this scope]
-    (pass-scope ->Seq pattern scope))
+    (pass-scope (fn [pattern] `(->Seq ~pattern)) pattern scope))
   Pattern
   (run* [this input bindings]
     (when (or
@@ -189,8 +203,5 @@
            (instance? clojure.lang.Seqable input))
       (run* pattern (seq input) bindings))))
 
-(defn or [& patterns] (->Or patterns))
-(defn and [& patterns] (->And patterns))
-(defn chain [& patterns] (->Chain patterns))
-(defn prefix [& patterns] (->Seq (chain-pattern patterns)))
-(defn seqable [& patterns] (->Total (prefix-pattern patterns)))
+(defn prefix [& patterns] (->Seq (->Chain patterns)))
+(defn seqable [& patterns] (->Total (apply prefix patterns)))

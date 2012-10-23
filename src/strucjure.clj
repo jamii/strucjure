@@ -25,17 +25,3 @@
 ;; --- API ---
 
 ;; will redef this later when bootstrapping
-(defn parse-pattern [pattern-src]
-  (eval pattern-src))
-
-(defmacro view [& pattern-srcs&result-srcs]
-  (assert (even? (count pattern-srcs&result-srcs)))
-  `(view/or
-    ~@(for [[pattern-src result-src] (partition 2 pattern-srcs&result-srcs)]
-        (let [pattern-ast (parse-pattern pattern-src)
-              [pattern scope] (pattern/with-scope pattern-ast {})
-              result-fun (util/src-with-scope result-src scope)]
-          `(view/->Match ~pattern ~result-fun)))))
-
-(defmacro defview [name & pattern-srcs&result-srcs]
-  `)

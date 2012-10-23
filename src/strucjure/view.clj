@@ -1,4 +1,5 @@
 (ns strucjure.view
+  (:use [slingshot.slingshot :only [try+ throw+]])
   (:require [strucjure.pattern :as pattern]))
 
 (defprotocol View
@@ -6,35 +7,40 @@
   (run* [this input]
     "Run the view with the given input. Return [remaining-input output] on success or nil on failure."))
 
+(defrecord Raw [f]
+  View
+  (run* [this input]
+    (let [output (f input)]
+      (assert (or (nil? output)
+                  (and (sequential? output)
+                       (= 2 (count output)))))
+      output)))
+
 (defrecord NoMatch [view input])
 (defrecord PartialMatch [view input remaining output])
 
-(defn run [this input]
-  (if-let [[remaining output] (run* this input)]
+(defn run [view input]
+  (if-let [[remaining output] (run* view input)]
     (if (nil? remaining)
       output
       (throw+ (PartialMatch. view input remaining output)))
     (throw+ (NoMatch. view input))))
 
-(defrecord Import* [view-src pattern]
+(defrecord Import [view-fun pattern]
   strucjure.pattern.AST
   (with-scope [this scope]
-    (assert (= nil view-fun))
-    (let [view-fun (eval `(fn [] ~view-src))] ; don't give view-src access to the bindings - enforces context-free
-      (pass-scope #(->Import view-src view-fun %) pattern scope))))
-
-(defrecord Import [view-src view-fun pattern]
+    (pattern/pass-scope (fn [pattern] `(->Import (fn [] ~view-fun) ~pattern)) pattern scope))
   strucjure.pattern.Pattern
   (run* [this input bindings]
     (when-let [[remaining output] (run* (view-fun) input)]
       (when (nil? remaining)
-        (run* pattern output bindings)))))
+        (pattern/run* pattern output bindings)))))
 
 (defrecord Match [pattern result-fun]
   strucjure.view.View
   (run* [this input]
-    (if-let [[remaining bindings] (pattern/run input)]
-      [remaining (result-fun bindings)])))
+    (if-let [[remaining bindings] (pattern/run pattern input)]
+      [remaining (result-fun input bindings)])))
 
 (defrecord Not [view]
   View
@@ -60,7 +66,7 @@
              views views]
         (when-let [result (run* view input)]
           (if-let [[view & views] views]
-            (recur views)
+            (recur view views)
             result))))))
 
 (defrecord ZeroOrMore [view]
@@ -71,11 +77,13 @@
            (instance? clojure.lang.Seqable input))
       (loop [elems (seq input)
              outputs nil]
-        (or (when-let [[elem elems] elems]
-              (when-let [[remaining output] (run* view elem)]
-                (when (nil? remaining)
-                  (recur elems (cons output outputs)))))
-            [elems (reverse outputs)])))))
+        (if-let [[elem elems] elems]
+          (if-let [[remaining output] (run* view elem)]
+            (if (nil? remaining)
+              (recur elems (cons output outputs))
+              [elems (reverse outputs)])
+            [elems (reverse outputs)])
+          [elems (reverse outputs)])))))
 
 (defrecord ZeroOrMorePrefix [view]
   View
@@ -83,13 +91,11 @@
     (loop [input input
            outputs nil]
       (if-let [[remaining output] (run* view input)]
-        (if (nil? remaining)
-          [nil (reverse outputs)]
-          (recur remaining (cons output outputs)))
+        (let [outputs (cons output outputs)]
+          (if (nil? remaining)
+            [nil (reverse outputs)]
+            (recur remaining outputs)))
         [input (reverse outputs)]))))
 
-(def not ->Not)
-(defn and [& views] (->And views))
-(defn or [& views] (->Or views))
 (def zero-or-more ->ZeroOrMore)
 (def zero-or-more-prefix ->ZeroOrMorePrefix)

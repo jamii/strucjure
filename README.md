@@ -467,6 +467,8 @@ The syntax of strucjure itself is self-defined using views.
   `(view/->Or ~(vec matches)))
 ```
 
+The strucjure.test namespace defines a view which parses this readme and runs all of the examples.
+
 ## License
 
 Distributed under the GNU Lesser General Public License.

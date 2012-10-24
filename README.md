@@ -28,7 +28,7 @@ Strucjure does not yet support:
 
 ## Limitations
 
- * The current implementation is entirely interpreted (since 0.3.0) and for simple patterns will be significantly slower than the equivalent hand-written code.
+ * The current implementation (since 0.3.0) is entirely interpreted and for simple patterns will be significantly slower than the equivalent hand-written code.
 
  * Strucjure cannot automatically rewrite left-recursive rules. You have to manually transform your grammars into a non-left-recursive form.
 

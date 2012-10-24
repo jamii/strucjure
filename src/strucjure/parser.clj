@@ -13,7 +13,7 @@
      [nil (eval pattern-src)])))
 
 (defmacro pattern [pattern-src]
-  (let [pattern-ast (view/run parse-pattern-ast pattern-src)
+  (let [pattern-ast (view/run-or-throw parse-pattern-ast pattern-src)
         [pattern _] (pattern/with-scope pattern-ast #{})]
     pattern))
 
@@ -30,13 +30,13 @@
      (assert (even? (count pattern-srcs&result-srcs)))
      [nil `(view/->Or
             ~(vec (for [[pattern-src result-src] (partition 2 pattern-srcs&result-srcs)]
-                    (let [pattern-ast (view/run parse-pattern-ast pattern-src)
+                    (let [pattern-ast (view/run-or-throw parse-pattern-ast pattern-src)
                           [pattern scope] (pattern/with-scope pattern-ast #{})
                           result-fun (util/src-with-scope result-src scope)]
                       `(view/->Match ~pattern ~result-fun)))))])))
 
 (defmacro view [& pattern-srcs&result-srcs]
-  (view/run parse-view pattern-srcs&result-srcs))
+  (view/run-or-throw parse-view pattern-srcs&result-srcs))
 
 (defmacro defview [name & pattern-srcs&result-srcs]
   `(def ~name (view ~@pattern-srcs&result-srcs)))

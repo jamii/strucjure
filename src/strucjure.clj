@@ -19,8 +19,8 @@
 ;;     but support seq...
 ;;   string patterns should be able to parse prefixes
 
-(def run-view view/run)
-(def run-pattern pattern/run)
+(def run-pattern pattern/run-or-throw)
+(def run-view view/run-or-throw)
 
 (defmacro pattern [& args]
   `(parser/pattern ~@args))

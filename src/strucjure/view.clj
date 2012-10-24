@@ -16,11 +16,14 @@
                        (= 2 (count output)))))
       output)))
 
+(defn run [view input]
+  (run* view input))
+
 (defrecord NoMatch [view input])
 (defrecord PartialMatch [view input remaining output])
 
-(defn run [view input]
-  (if-let [[remaining output] (run* view input)]
+(defn run-or-throw [view input]
+  (if-let [[remaining output] (run view input)]
     (if (nil? remaining)
       output
       (throw+ (PartialMatch. view input remaining output)))
@@ -32,8 +35,8 @@
     (pattern/pass-scope (fn [pattern] `(->Import (fn [] ~view-fun) ~pattern)) pattern scope))
   strucjure.pattern.Pattern
   (run* [this input bindings]
-    (when-let [[remaining output] (run* (view-fun) input)]
-      (when-let [[remaining* new-bindings] (pattern/run* pattern output bindings)]
+    (when-let [[remaining output] (run (view-fun) input)]
+      (when-let [[remaining* new-bindings] (pattern/run pattern output bindings)]
         (when (nil? remaining*)
           [remaining new-bindings])))))
 
@@ -46,7 +49,7 @@
 (defrecord Not [view]
   View
   (run* [this input]
-    (if-let [result (run* view input)]
+    (if-let [result (run view input)]
       nil
       [nil nil])))
 
@@ -55,7 +58,7 @@
   (run* [this input]
     (loop [views views]
       (when-let [[view & views] views]
-        (if-let [result (run* view input)]
+        (if-let [result (run view input)]
           result
           (recur views))))))
 
@@ -65,7 +68,7 @@
     (let [[view views] views]
       (loop [view view
              views views]
-        (when-let [result (run* view input)]
+        (when-let [result (run view input)]
           (if-let [[view & views] views]
             (recur view views)
             result))))))
@@ -79,7 +82,7 @@
       (loop [elems (seq input)
              outputs nil]
         (if-let [[elem & elems] elems]
-          (if-let [[remaining output] (run* view elem)]
+          (if-let [[remaining output] (run view elem)]
             (if (nil? remaining)
               (recur elems (cons output outputs))
               [(cons elem elems) (reverse outputs)])
@@ -91,7 +94,7 @@
   (run* [this input]
     (loop [input input
            outputs nil]
-      (if-let [[remaining output] (run* view input)]
+      (if-let [[remaining output] (run view input)]
         (let [outputs (cons output outputs)]
           (if (nil? remaining)
             [nil (reverse outputs)]

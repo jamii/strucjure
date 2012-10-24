@@ -1,4 +1,5 @@
 (ns strucjure.pattern
+  (:use [slingshot.slingshot :only [try+ throw+]])
   (:require [strucjure.util :as util]))
 
 (defprotocol AST
@@ -11,8 +12,21 @@
   (run* [this input bindings]
     "Run the pattern with the given input and bindings. Return [remaining-input new-bindings] on success or nil on failure."))
 
-(defn run [pattern input]
-  (run* pattern input {}))
+(defn run
+  ([pattern input]
+     (run* pattern input {}))
+  ([pattern input bindings]
+     (run* pattern input bindings)))
+
+(defrecord NoMatch [view input])
+(defrecord PartialMatch [view input remaining output])
+
+(defn run-or-throw [pattern input]
+  (if-let [[remaining bindings] (run pattern input)]
+    (if (nil? remaining)
+      bindings
+      (throw+ (PartialMatch. pattern input remaining bindings)))
+    (throw+ (NoMatch. pattern input))))
 
 (defn pass-scope [constructor pattern scope]
   (let [[new-pattern new-scope] (with-scope pattern scope)]
@@ -74,7 +88,7 @@
   Pattern
   (run* [this input bindings]
     (when-let [[head & tail] input]
-      (when-let [[remaining new-bindings :as result] (run* pattern head bindings)]
+      (when-let [[remaining new-bindings :as result] (run pattern head bindings)]
         (when (nil? remaining)
           [tail new-bindings])))))
 
@@ -93,7 +107,7 @@
         (if-let [[[key pattern] & keys&patterns] keys&patterns]
           (let [value (get input key ::not-found)]
             (when (not (= ::not-found value))
-              (when-let [[remaining & new-bindings] (run* pattern value bindings)]
+              (when-let [[remaining & new-bindings] (run pattern value bindings)]
                 (when (nil? remaining)
                   (recur keys&patterns new-bindings)))))
           [nil bindings])))))
@@ -110,7 +124,7 @@
              bindings bindings]
         (if-let [[pattern & patterns] patterns]
           (when-let [[arg & args] args]
-            (when-let [[remaining & new-bindings] (run* pattern arg bindings)]
+            (when-let [[remaining & new-bindings] (run pattern arg bindings)]
               (when (nil? remaining)
                 (recur patterns args new-bindings))))
           [nil bindings])))))
@@ -130,7 +144,7 @@
     (pass-scope (fn [pattern] `(->Total ~pattern)) pattern scope))
   Pattern
   (run* [this input bindings]
-    (when-let [[remaining _ :as result] (run* pattern input bindings)]
+    (when-let [[remaining _ :as result] (run pattern input bindings)]
       (when (nil? remaining)
         result))))
 
@@ -140,7 +154,7 @@
     (pass-scope (fn [pattern] `(->Not ~pattern)) pattern scope))
   Pattern
   (run* [this input bindings]
-    (if-let [result (run* pattern input bindings)]
+    (if-let [result (run pattern input bindings)]
       nil
       [nil bindings])))
 
@@ -157,7 +171,7 @@
   (run* [this input bindings]
     (loop [patterns patterns]
       (when-let [[pattern & patterns-rest] patterns]
-        (if-let [result (run* pattern input bindings)]
+        (if-let [result (run pattern input bindings)]
           result
           (recur patterns-rest))))))
 
@@ -171,7 +185,7 @@
       (loop [pattern pattern
              patterns patterns
              bindings bindings]
-        (when-let [[remaining new-bindings :as result] (run* pattern input bindings)]
+        (when-let [[remaining new-bindings :as result] (run pattern input bindings)]
           (if-let [[pattern & patterns] patterns]
             (recur pattern patterns new-bindings)
             result)))
@@ -188,7 +202,7 @@
              patterns patterns
              input input
              bindings bindings]
-        (when-let [[remaining new-bindings :as result] (run* pattern input bindings)]
+        (when-let [[remaining new-bindings :as result] (run pattern input bindings)]
           (if-let [[pattern & patterns] patterns]
             (recur pattern patterns remaining new-bindings)
             result)))
@@ -203,7 +217,7 @@
     (when (or
            (nil? input)
            (instance? clojure.lang.Seqable input))
-      (run* pattern (seq input) bindings))))
+      (run pattern (seq input) bindings))))
 
 (defn prefix [& patterns] (->Seq (->Chain patterns)))
 (defn seqable [& patterns] (->Total (apply prefix patterns)))

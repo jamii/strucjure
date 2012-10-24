@@ -22,7 +22,7 @@
 (def run view/run-or-throw)
 
 (defn matches [view input]
-  (true? (view/run view input)))
+  (true? (view/run view input {})))
 
 (defmacro pattern [& args]
   `(parser/pattern ~@args))

@@ -7,12 +7,12 @@
 
 (defn tokenise [sep]
   (view/->Raw
-   (fn [input]
+   (fn [input opts]
      (when-let [elems (seq input)]
        (loop [elems elems
               token-acc nil
               tokens-acc nil]
-         (if-let [[remaining _] (view/run* sep elems)]
+         (if-let [[remaining _] (view/run sep elems opts)]
            (recur remaining nil (cons (reverse token-acc) tokens-acc))
            (if-let [[elem & elems] elems]
              (recur elems (cons elem token-acc) tokens-acc)

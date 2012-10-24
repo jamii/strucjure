@@ -9,7 +9,7 @@
 ;; will redef this later when bootstrapping
 (def parse-pattern-ast
   (view/->Raw
-   (fn [pattern-src]
+   (fn [pattern-src opts]
      [nil (eval pattern-src)])))
 
 (defmacro pattern [pattern-src]
@@ -26,11 +26,11 @@
 ;; will redef this later when bootstrapping
 (def parse-view
   (view/->Raw
-   (fn [pattern-srcs&result-srcs]
+   (fn [pattern-srcs&result-srcs opts]
      (assert (even? (count pattern-srcs&result-srcs)))
      [nil `(view/->Or
             ~(vec (for [[pattern-src result-src] (partition 2 pattern-srcs&result-srcs)]
-                    (let [pattern-ast (view/run-or-throw parse-pattern-ast pattern-src)
+                    (let [pattern-ast (view/run-or-throw parse-pattern-ast pattern-src opts)
                           [pattern scope] (pattern/with-scope pattern-ast #{})
                           result-fun (util/src-with-scope result-src scope)]
                       `(view/->Match ~pattern ~result-fun)))))])))

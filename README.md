@@ -71,7 +71,7 @@ user> (run (pattern [?x '+ ?y]) '[1 + 2])
 user> (run (pattern [?x '+ ?y]) '(1 + 2))
 {y 2, x 1}
 user> (run (pattern [?x '+ ?y]) '(1 * 2))
-ExceptionInfo throw+: #strucjure.view.NoMatch{:view #strucjure.pattern.Total{:pattern #strucjure.pattern.Seq{:pattern #strucjure.pattern.Chain{:patterns [#strucjure.pattern.Head{:pattern #strucjure.pattern.Bind{:symbol x}} #strucjure.pattern.Head{:pattern #strucjure.pattern.Literal{:value +}} #strucjure.pattern.Head{:pattern #strucjure.pattern.Bind{:symbol y}}]}}}, :input (1 * 2)}  strucjure.pattern/run-or-throw (pattern.clj:29)
+ExceptionInfo throw+: #strucjure.view.NoMatch{:view #strucjure.pattern.Total{:pattern #strucjure.pattern.Seq{:pattern #strucjure.pattern.Chain{:patterns [#strucjure.pattern.Head{:pattern #strucjure.pattern.Bind{:symbol x}} #strucjure.pattern.Head{:pattern #strucjure.pattern.Literal{:value +}} #strucjure.pattern.Head{:pattern #strucjure.pattern.Bind{:symbol y}}]}}}, :input (1 * 2)}  strucjure.view/run-or-throw (view.clj:38)
 user> (defview calculate
         (and number? ?n) n
         [?x '+ ?y] (+ x y)
@@ -90,9 +90,9 @@ user> (run calculate '(1 / 2))
 ExceptionInfo throw+: #strucjure.view.NoMatch{:view #strucjure.view.Or{:views [#strucjure.view.Match{:pattern #strucjure.pattern.And{:patterns [#strucjure.pattern.Guard{:fun #<user$fn__3736 user$fn__3736@464242a9>} #strucjure.pattern.Bind{:symbol n}]}, :result-fun #<user$fn__3738 user$fn__3738@79feea8f>} #strucjure.view.Match{:pattern #strucjure.pattern.Total{:pattern #strucjure.pattern.Seq{:pattern #strucjure.pattern.Chain{:patterns [#strucjure.pattern.Head{:pattern #strucjure.pattern.Bind{:symbol x}} #strucjure.pattern.Head{:pattern #strucjure.pattern.Literal{:value +}} #strucjure.pattern.Head{:pattern #strucjure.pattern.Bind{:symbol y}}]}}}, :result-fun #<user$fn__3740 user$fn__3740@2db5424e>} #strucjure.view.Match{:pattern #strucjure.pattern.Total{:pattern #strucjure.pattern.Seq{:pattern #strucjure.pattern.Chain{:patterns [#strucjure.pattern.Head{:pattern #strucjure.pattern.Bind{:symbol x}} #strucjure.pattern.Head{:pattern #strucjure.pattern.Literal{:value *}} #strucjure.pattern.Head{:pattern #strucjure.pattern.Bind{:symbol y}}]}}}, :result-fun #<user$fn__3742 user$fn__3742@4f7d24b6>}]}, :input (1 / 2)}  strucjure.view/run-or-throw (view.clj:30)
 user> (require '[strucjure.view :as view])
 nil
-user> (view/run calculate '(1 * 2))
+user> (view/run calculate '(1 * 2) {})
 [nil 2]
-user> (view/run calculate '(1 / 2))
+user> (view/run calculate '(1 / 2) {})
 nil
 ```
 
@@ -134,7 +134,7 @@ Primitives (nil, true, false, numbers, keywords, characters and strings) create 
 user> (run (pattern 1) 1)
 {}
 user> (run (pattern 2) 1)
-ExceptionInfo throw+: #strucjure.view.NoMatch{:view #strucjure.pattern.Literal{:value 2}, :input 1}  strucjure.pattern/run-or-throw (pattern.clj:29)
+ExceptionInfo throw+: #strucjure.view.NoMatch{:view #strucjure.pattern.Literal{:value 2}, :input 1}  strucjure.view/run-or-throw (view.clj:38)
 user> (run (pattern "foo") "foo")
 {}
 ```
@@ -145,7 +145,7 @@ Quoted forms match their quoted self.
 user> (run (pattern '(+ 1 2)) '(+ 1 2))
 {}
 user> (run (pattern 'vector?) vector?)
-ExceptionInfo throw+: #strucjure.view.NoMatch{:view #strucjure.pattern.Literal{:value vector?}, :input #<core$vector clojure.core$vector@cd3509c>}  strucjure.pattern/run-or-throw (pattern.clj:29)
+ExceptionInfo throw+: #strucjure.view.NoMatch{:view #strucjure.pattern.Literal{:value vector?}, :input #<core$vector clojure.core$vector@cd3509c>}  strucjure.view/run-or-throw (view.clj:38)
 user> (run (pattern 'vector?) 'vector?)
 {}
 ```
@@ -163,7 +163,7 @@ Repeated uses of the same binding must match the same value.
 
 ```clojure
 user> (run (pattern [?x ?x]) [1 2])
-ExceptionInfo throw+: #strucjure.view.NoMatch{:view #strucjure.pattern.Total{:pattern #strucjure.pattern.Seq{:pattern #strucjure.pattern.Chain{:patterns [#strucjure.pattern.Head{:pattern #strucjure.pattern.Bind{:symbol x}} #strucjure.pattern.Head{:pattern #strucjure.pattern.Guard{:fun #<user$eval8319$fn__8321 user$eval8319$fn__8321@463c4bca>}}]}}}, :input [1 2]}  strucjure.pattern/run-or-throw (pattern.clj:29)
+ExceptionInfo throw+: #strucjure.view.NoMatch{:view #strucjure.pattern.Total{:pattern #strucjure.pattern.Seq{:pattern #strucjure.pattern.Chain{:patterns [#strucjure.pattern.Head{:pattern #strucjure.pattern.Bind{:symbol x}} #strucjure.pattern.Head{:pattern #strucjure.pattern.Guard{:fun #<user$eval8319$fn__8321 user$eval8319$fn__8321@463c4bca>}}]}}}, :input [1 2]}  strucjure.view/run-or-throw (view.clj:38)
 user> (run (pattern [?x ?x]) [1 1])
 {x 1}
 ```
@@ -174,9 +174,9 @@ Anonymous functions and symbols ending in ? are applied to the input and match i
 user> (run (pattern vector?) [1 2 3])
 {}
 user> (run (pattern string?) [1 2 3])
-ExceptionInfo throw+: #strucjure.view.NoMatch{:view #strucjure.pattern.Guard{:fun #<user$eval6476$fn__6478 user$eval6476$fn__6478@284876e0>}, :input [1 2 3]}  strucjure.pattern/run-or-throw (pattern.clj:29)
+ExceptionInfo throw+: #strucjure.view.NoMatch{:view #strucjure.pattern.Guard{:fun #<user$eval6476$fn__6478 user$eval6476$fn__6478@284876e0>}, :input [1 2 3]}  strucjure.view/run-or-throw (view.clj:38)
 user> (run (pattern #(> (count %) 3)) [1 2 3])
-ExceptionInfo throw+: #strucjure.view.NoMatch{:view #strucjure.pattern.Guard{:fun #<user$eval6493$fn__6495 user$eval6493$fn__6495@507792fe>}, :input [1 2 3]}  strucjure.pattern/run-or-throw (pattern.clj:29)
+ExceptionInfo throw+: #strucjure.view.NoMatch{:view #strucjure.pattern.Guard{:fun #<user$eval6493$fn__6495 user$eval6493$fn__6495@507792fe>}, :input [1 2 3]}  strucjure.view/run-or-throw (view.clj:38)
 user> (run (pattern #(> (count %) 2)) [1 2 3])
 {}
 ```
@@ -189,7 +189,7 @@ user> (run (pattern java.lang.String) "foo")
 user> (run (pattern java.lang.Object) "foo")
 {}
 user> (run (pattern java.lang.Appendable) "foo")
-ExceptionInfo throw+: #strucjure.view.NoMatch{:view #strucjure.pattern.Guard{:fun #<user$eval6642$fn__6644 user$eval6642$fn__6644@2c9f3eba>}, :input "foo"}  strucjure.pattern/run-or-throw (pattern.clj:29)
+ExceptionInfo throw+: #strucjure.view.NoMatch{:view #strucjure.pattern.Guard{:fun #<user$eval6642$fn__6644 user$eval6642$fn__6644@2c9f3eba>}, :input "foo"}  strucjure.view/run-or-throw (view.clj:38)
 ```
 
 Any other symbols are assumed to be externally bound and match against their value.
@@ -208,16 +208,16 @@ user> (run (pattern #"foo") "foo")
 user> (run (pattern #"foo") "foobear")
 {}
 user> (run (pattern #"foo\b") "foobear")
-ExceptionInfo throw+: #strucjure.view.NoMatch{:view #strucjure.pattern.Regex{:regex #"foo\b"}, :input "foobear"}  strucjure.pattern/run-or-throw (pattern.clj:29)
+ExceptionInfo throw+: #strucjure.view.NoMatch{:view #strucjure.pattern.Regex{:regex #"foo\b"}, :input "foobear"}  strucjure.view/run-or-throw (view.clj:38)
 ```
 
 Maps lookup their keys and, if the key is found, match against the associated pattern.
 
 ```clojure
 user> (run (pattern {:a 1 :b ?x}) {:a 1})
-ExceptionInfo throw+: #strucjure.view.NoMatch{:view #strucjure.pattern.Map{:keys&patterns [[:a #strucjure.pattern.Literal{:value 1}] [:b #strucjure.pattern.Bind{:symbol x}]]}, :input {:a 1}}  strucjure.pattern/run-or-throw (pattern.clj:29)
+ExceptionInfo throw+: #strucjure.view.NoMatch{:view #strucjure.pattern.Map{:keys&patterns [[:a #strucjure.pattern.Literal{:value 1}] [:b #strucjure.pattern.Bind{:symbol x}]]}, :input {:a 1}}  strucjure.view/run-or-throw (view.clj:38)
 user> (run (pattern {:a 1 :b ?x}) {:a 2 :b 1})
-ExceptionInfo throw+: #strucjure.view.NoMatch{:view #strucjure.pattern.Map{:keys&patterns [[:a #strucjure.pattern.Literal{:value 1}] [:b #strucjure.pattern.Bind{:symbol x}]]}, :input {:a 2, :b 1}}  strucjure.pattern/run-or-throw (pattern.clj:29)
+ExceptionInfo throw+: #strucjure.view.NoMatch{:view #strucjure.pattern.Map{:keys&patterns [[:a #strucjure.pattern.Literal{:value 1}] [:b #strucjure.pattern.Bind{:symbol x}]]}, :input {:a 2, :b 1}}  strucjure.view/run-or-throw (view.clj:38)
 user> (run (pattern {:a 1 :b ?x}) {:a 1 :b 2})
 {x 2}
 ```
@@ -226,7 +226,7 @@ If the key is not found then even nil patterns will not match.
 
 ```clojure
 user> (run (pattern {:a nil}) {:b 2})
-ExceptionInfo throw+: #strucjure.view.NoMatch{:view #strucjure.pattern.Map{:keys&patterns [[:a #strucjure.pattern.Literal{:value nil}]]}, :input {:b 2}}  strucjure.pattern/run-or-throw (pattern.clj:29)
+ExceptionInfo throw+: #strucjure.view.NoMatch{:view #strucjure.pattern.Map{:keys&patterns [[:a #strucjure.pattern.Literal{:value nil}]]}, :input {:b 2}}  strucjure.view/run-or-throw (view.clj:38)
 ```
 
 Map patterns do not fail if other keys are present too.
@@ -246,7 +246,7 @@ user> (run (pattern (Foo. ?bear)) (Foo. "imabear!"))
 user> (defrecord Bar [bear])
 user.Bar
 user> (run (pattern (Foo. ?bear)) (Bar. "imabear!"))
-ExceptionInfo throw+: #strucjure.view.NoMatch{:view #strucjure.pattern.Record{:class-name user.Foo, :patterns [#strucjure.pattern.Bind{:symbol bear}]}, :input #user.Bar{:bear "imabear!"}}  strucjure.pattern/run-or-throw (pattern.clj:29)
+ExceptionInfo throw+: #strucjure.view.NoMatch{:view #strucjure.pattern.Record{:class-name user.Foo, :patterns [#strucjure.pattern.Bind{:symbol bear}]}, :input #user.Bar{:bear "imabear!"}}  strucjure.view/run-or-throw (view.clj:38)
 ```
 
 Record literals will eventually be supported.
@@ -264,7 +264,7 @@ Unfortunately strings are not instances of clojure.lang.Seqable. Vector patterns
 
 ```clojure
 user> (run (pattern [\a \b ?x]) "abc")
-ExceptionInfo throw+: #strucjure.view.NoMatch{:view #strucjure.pattern.Total{:pattern #strucjure.pattern.Seq{:pattern #strucjure.pattern.Chain{:patterns [#strucjure.pattern.Head{:pattern #strucjure.pattern.Literal{:value \a}} #strucjure.pattern.Head{:pattern #strucjure.pattern.Literal{:value \b}} #strucjure.pattern.Head{:pattern #strucjure.pattern.Bind{:symbol x}}]}}}, :input "abc"}  strucjure.pattern/run-or-throw (pattern.clj:29)
+ExceptionInfo throw+: #strucjure.view.NoMatch{:view #strucjure.pattern.Total{:pattern #strucjure.pattern.Seq{:pattern #strucjure.pattern.Chain{:patterns [#strucjure.pattern.Head{:pattern #strucjure.pattern.Literal{:value \a}} #strucjure.pattern.Head{:pattern #strucjure.pattern.Literal{:value \b}} #strucjure.pattern.Head{:pattern #strucjure.pattern.Bind{:symbol x}}]}}}, :input "abc"}  strucjure.view/run-or-throw (view.clj:38)
 user> (run (pattern [\a \b ?x]) (seq "abc"))
 {x \c}
 ```
@@ -286,10 +286,10 @@ The special form 'prefix' behaves much like a vector but is allowed to match onl
 user> (run (pattern (prefix 1 2)) [1 2])
 {}
 user> (run (pattern (prefix 1 2)) [1 2 3])
-ExceptionInfo throw+: #strucjure.view.PartialMatch{:view #strucjure.pattern.Seq{:pattern #strucjure.pattern.Chain{:patterns [#strucjure.pattern.Head{:pattern #strucjure.pattern.Literal{:value 1}} #strucjure.pattern.Head{:pattern #strucjure.pattern.Literal{:value 2}}]}}, :input [1 2 3], :remaining (3), :output {}}  strucjure.pattern/run-or-throw (pattern.clj:28)
+ExceptionInfo throw+: #strucjure.view.PartialMatch{:view #strucjure.pattern.Seq{:pattern #strucjure.pattern.Chain{:patterns [#strucjure.pattern.Head{:pattern #strucjure.pattern.Literal{:value 1}} #strucjure.pattern.Head{:pattern #strucjure.pattern.Literal{:value 2}}]}}, :input [1 2 3], :remaining (3), :output {}}  strucjure.view/run-or-throw (pattern.clj:28)
 user> (require '[strucjure.pattern :as pattern])
 nil
-user> (pattern/run  (pattern (prefix 1 2)) [1 2 3])
+user> (pattern/run (pattern (prefix 1 2)) [1 2 3] {} {})
 [(3) {}]
 ```
 
@@ -301,7 +301,7 @@ user> (run (pattern (not integer?)) [2 2])
 user> (run (pattern (not integer?)) "foo")
 {}
 user> (run (pattern (not integer?)) 1)
-ExceptionInfo throw+: #strucjure.view.NoMatch{:view #strucjure.pattern.Not{:pattern #strucjure.pattern.Guard{:fun #<user$eval8595$fn__8597 user$eval8595$fn__8597@3db625b7>}}, :input 1}  strucjure.pattern/run-or-throw (pattern.clj:29)
+ExceptionInfo throw+: #strucjure.view.NoMatch{:view #strucjure.pattern.Not{:pattern #strucjure.pattern.Guard{:fun #<user$eval8595$fn__8597 user$eval8595$fn__8597@3db625b7>}}, :input 1}  strucjure.view/run-or-throw (view.clj:38)
 user> (run (pattern (and string? ?x)) "foo")
 {x "foo"}
 user> (run (pattern (or [1 ?x] [?x 1])) [1 2])
@@ -309,7 +309,7 @@ user> (run (pattern (or [1 ?x] [?x 1])) [1 2])
 user> (run (pattern (or [1 ?x] [?x 1])) [2 1])
 {x 2}
 user> (run (pattern (or [1 ?x] [?x 1])) [2 2])
-ExceptionInfo throw+: #strucjure.view.NoMatch{:view #strucjure.pattern.Or{:patterns [#strucjure.pattern.Total{:pattern #strucjure.pattern.Seq{:pattern #strucjure.pattern.Chain{:patterns [#strucjure.pattern.Head{:pattern #strucjure.pattern.Literal{:value 1}} #strucjure.pattern.Head{:pattern #strucjure.pattern.Bind{:symbol x}}]}}} #strucjure.pattern.Total{:pattern #strucjure.pattern.Seq{:pattern #strucjure.pattern.Chain{:patterns [#strucjure.pattern.Head{:pattern #strucjure.pattern.Bind{:symbol x}} #strucjure.pattern.Head{:pattern #strucjure.pattern.Literal{:value 1}}]}}}]}, :input [2 2]}  strucjure.pattern/run-or-throw (pattern.clj:29)
+ExceptionInfo throw+: #strucjure.view.NoMatch{:view #strucjure.pattern.Or{:patterns [#strucjure.pattern.Total{:pattern #strucjure.pattern.Seq{:pattern #strucjure.pattern.Chain{:patterns [#strucjure.pattern.Head{:pattern #strucjure.pattern.Literal{:value 1}} #strucjure.pattern.Head{:pattern #strucjure.pattern.Bind{:symbol x}}]}}} #strucjure.pattern.Total{:pattern #strucjure.pattern.Seq{:pattern #strucjure.pattern.Chain{:patterns [#strucjure.pattern.Head{:pattern #strucjure.pattern.Bind{:symbol x}} #strucjure.pattern.Head{:pattern #strucjure.pattern.Literal{:value 1}}]}}}]}, :input [2 2]}  strucjure.view/run-or-throw (view.clj:38)
 ```
 
 Any other function call should be of the form (view* pattern). This calls an external view on the current input and matches the output against the pattern.

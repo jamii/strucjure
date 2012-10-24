@@ -18,10 +18,10 @@
     pattern))
 
 (defmacro defpattern [name pattern]
-  `(def ~name (pattern ~pattern)))
+  `(def ~name (pattern/->Named '~(util/with-*ns* name) (pattern ~pattern))))
 
 (defmacro defnpattern [name args pattern]
-  `(def ~name ~args (pattern ~pattern)))
+  `(def ~name ~args (pattern/->Named '~(util/with-*ns* name) (pattern ~pattern))))
 
 ;; will redef this later when bootstrapping
 (def parse-view
@@ -39,10 +39,10 @@
   (view/run-or-throw parse-view pattern-srcs&result-srcs))
 
 (defmacro defview [name & pattern-srcs&result-srcs]
-  `(def ~name (view ~@pattern-srcs&result-srcs)))
+  `(def ~name (view/->Named '~(util/with-*ns* name) (view ~@pattern-srcs&result-srcs))))
 
 (defmacro defnview [name args & pattern-srcs&result-srcs]
-  `(defn ~name ~args (view ~@pattern-srcs&result-srcs)))
+  `(defn ~name ~args (view/->Named '~(util/with-*ns* name) (view ~@pattern-srcs&result-srcs))))
 
 ;; --- PARSER UTILS ---
 

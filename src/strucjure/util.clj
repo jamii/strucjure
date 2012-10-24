@@ -19,3 +19,12 @@
     `(fn [~input-sym ~bindings-sym]
        (let [~@(apply concat bindings)]
          ~src))))
+
+(defn with-*ns* [symbol]
+  (symbol (str *ns* "/" symbol)))
+
+(defn null-pre-view [name input]
+  input)
+
+(defn null-post-view [name output]
+  output)

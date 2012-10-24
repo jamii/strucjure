@@ -1,6 +1,7 @@
 (ns strucjure.view
   (:use [slingshot.slingshot :only [try+ throw+]])
-  (:require [strucjure.pattern :as pattern]))
+  (:require [strucjure.pattern :as pattern]
+            [strucjure.util :as util]))
 
 (defprotocol View
   "A view takes an input and either fails or consumes some/all of the input and returns an output."
@@ -111,3 +112,11 @@
 
 (def zero-or-more ->ZeroOrMore)
 (def zero-or-more-prefix ->ZeroOrMorePrefix)
+
+(defrecord Named [name view]
+  View
+  (run* [this input opts]
+    (let [input ((get opts :pre-view util/null-pre-view) name input)]
+      (when-let [[remaining output] (run view input opts)]
+        (let [output ((get opts :post-view util/null-post-view) name output)]
+          [remaining output])))))

@@ -208,3 +208,11 @@
 
 (defn prefix [& patterns] (->Seq (->Chain patterns)))
 (defn seqable [& patterns] (->Total (apply prefix patterns)))
+
+(defrecord Named [name pattern]
+  Pattern
+  (run* [this input bindings opts]
+    (let [input ((get opts :pre-view util/null-pre-view) name input)]
+      (when-let [[remaining new-bindings] (run pattern input bindings opts)]
+        (let [new-bindings ((get opts :post-view util/null-post-view) name new-bindings)]
+          [remaining new-bindings])))))

@@ -48,17 +48,17 @@
    \t \h \r \o \w \+ \: \space
    \# & ((one-or-more exception-chars) ?exception)
    & _]
-  [:throws (resolve (symbol (apply str exception)))]
+  [:throws (apply str exception)]
 
   ?data
-  [:returns (read-string (apply str data))])
+  [:returns (apply str data)])
 
 (defview example
   [& (line ?input-first)
    & ((zero-or-more-prefix indented-line) ?input-rest)
    & ((one-or-more-prefix line) ?output-lines)]
   {:input (with-out-str (doseq [line (cons input-first input-rest)] (print (apply str line) \space)))
-   :prints (with-out-str (doseq [line output-lines] (println (apply str line))))
+   :prints (with-out-str (doseq [line (butlast output-lines)] (println (apply str line))))
    :result (run result (last output-lines))})
 
 (defview prompt
@@ -85,22 +85,36 @@
   ((tokenise code-delim) ?chunks)
   (apply concat (map (partial run code-block) (take-nth 2 (rest chunks)))))
 
-(defn run-example [{:keys [input prints result]}]
-  (prn 'woot)
+(defn replace-fun [unread-form]
+  (.replaceAll unread-form "#<[^>]*>" "#<fun>"))
+
+(defn prints-as [string form]
+  (= (replace-fun string) (replace-fun (with-out-str (pr form)))))
+
+(defn example-test [input prints result]
   (match result
          [:returns ?value]
          (do
-           (is (= value (eval (read-string input))))
-           (is (= prints (with-out-str (eval (read-string input))))))
+           (is (prints-as value (input)))
+           (is (= prints (with-out-str (input)))))
 
          [:throws ?exception]
          (do
-           (is (try+ (eval (read-string input))
-                     false
-                     (catch (instance? exception %) _ true)))
+           (is (try+ (input)
+                     nil
+                     (catch java.lang.Object thrown
+                       (prints-as exception (class thrown)))))
            (is (= prints (with-out-str
-                           (try+ (eval (read-string input))
-                                 (catch (instance? exception %) _ nil))))))))
+                           (try+ (input)
+                                 (catch java.lang.Object _ nil))))))))
 
-(deftest run-readme
-  (doall (map run-example (run readme (seq (slurp "README.md"))))))
+(defmacro insert-example-test [{:keys [input prints result]}]
+  `(example-test (fn [] (eval '(do (use '~'strucjure) ~(read-string input)))) ~prints '~result))
+
+(defmacro insert-readme-test [file]
+  `(do
+     ~@(for [example (run readme (seq (slurp (eval file))))]
+         `(insert-example-test ~example))))
+
+(deftest readme-test
+  (insert-readme-test "README.md"))

@@ -18,16 +18,6 @@
   ([pattern input bindings]
      (run* pattern input bindings)))
 
-(defrecord NoMatch [view input])
-(defrecord PartialMatch [view input remaining output])
-
-(defn run-or-throw [pattern input]
-  (if-let [[remaining bindings] (run pattern input)]
-    (if (nil? remaining)
-      bindings
-      (throw+ (PartialMatch. pattern input remaining bindings)))
-    (throw+ (NoMatch. pattern input))))
-
 (defn pass-scope [constructor pattern scope]
   (let [[new-pattern new-scope] (with-scope pattern scope)]
    [(constructor new-pattern) new-scope]))

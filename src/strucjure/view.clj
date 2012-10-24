@@ -7,6 +7,11 @@
   (run* [this input]
     "Run the view with the given input. Return [remaining-input output] on success or nil on failure."))
 
+(extend-protocol View
+  strucjure.pattern.Pattern
+  (run* [this input]
+    (pattern/run this input)))
+
 (defrecord Raw [f]
   View
   (run* [this input]

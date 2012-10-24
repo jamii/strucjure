@@ -19,8 +19,10 @@
 ;;     but support seq...
 ;;   string patterns should be able to parse prefixes
 
-(def run-pattern pattern/run-or-throw)
-(def run-view view/run-or-throw)
+(def run view/run-or-throw)
+
+(defn matches [view input]
+  (true? (view/run view input)))
 
 (defmacro pattern [& args]
   `(parser/pattern ~@args))
@@ -37,7 +39,7 @@
   `(parser/defnview ~@args))
 
 (defmacro match [input & rest]
-  `(run-view (view ~@rest) ~input))
+  `(run (view ~@rest) ~input))
 
 (def zero-or-more view/zero-or-more)
 (def zero-or-more-prefix view/zero-or-more-prefix)

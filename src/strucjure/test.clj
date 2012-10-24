@@ -59,7 +59,7 @@
    & ((one-or-more-prefix line) ?output-lines)]
   {:input (with-out-str (doseq [line (cons input-first input-rest)] (print (apply str line) \space)))
    :prints (with-out-str (doseq [line output-lines] (println (apply str line))))
-   :result (run-view result (last output-lines))})
+   :result (run result (last output-lines))})
 
 (defview prompt
   (prefix \u \s \e \r \> \space)
@@ -68,7 +68,7 @@
 (defview code-block-inner
   (and (prompt _)
        ((tokenise prompt) ?chunks))
-  (map (partial run-view example) (filter #(not (empty? %)) chunks))
+  (map (partial run example) (filter #(not (empty? %)) chunks))
 
   _ ;; TODO would be nice to just eval other blocks and check for exceptions
   nil)
@@ -83,7 +83,7 @@
 
 (defview readme
   ((tokenise code-delim) ?chunks)
-  (apply concat (map (partial run-view code-block) (take-nth 2 (rest chunks)))))
+  (apply concat (map (partial run code-block) (take-nth 2 (rest chunks)))))
 
 (defn run-example [{:keys [input prints result]}]
   (prn 'woot)
@@ -103,4 +103,4 @@
                                  (catch (instance? exception %) _ nil))))))))
 
 (deftest run-readme
-  (doall (map run-example (run-view readme (seq (slurp "README.md"))))))
+  (doall (map run-example (run readme (seq (slurp "README.md"))))))

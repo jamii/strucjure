@@ -96,7 +96,7 @@
   AST
   (with-scope [this scope]
     (chain-scope
-     (fn [patterns] `(->Map (zip-map ~(map first keys&patterns) ~patterns)))
+     (fn [patterns] `(->Map ~(vec (map vector (map first keys&patterns) patterns))))
      (map second keys&patterns)
      scope))
   Pattern
@@ -107,7 +107,7 @@
         (if-let [[[key pattern] & keys&patterns] keys&patterns]
           (let [value (get input key ::not-found)]
             (when (not (= ::not-found value))
-              (when-let [[remaining & new-bindings] (run pattern value bindings)]
+              (when-let [[remaining new-bindings] (run pattern value bindings)]
                 (when (nil? remaining)
                   (recur keys&patterns new-bindings)))))
           [nil bindings])))))

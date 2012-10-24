@@ -132,7 +132,7 @@
 (defrecord Regex [regex]
   AST
   (with-scope [this scope]
-    `(->Regex ~regex))
+    [`(->Regex ~regex) scope])
   Pattern
   (run* [this input bindings]
     (when-let [_ (re-find regex input)]

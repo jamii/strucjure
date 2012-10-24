@@ -20,15 +20,19 @@ Strucjure does not yet support:
 
  * Set literals or record literals
 
- * Exporting bindings from Or and Not patterns
-
- * Informative error messages
-
- * Left-recursive rules (you'll get a stack overflow)
+ * Informative error messages / traces
 
  * Memoisation
 
  * Ad-hoc extension
+
+## Limitations
+
+ * The current implementation is entirely interpreted (since 0.3.0) and for simple patterns will be significantly slower than the equivalent hand-written code.
+
+ * Strucjure cannot automatically rewrite left-recursive rules. You have to manually transform your grammars into a non-left-recursive form.
+
+ * Views retain all of their input until finishing. This makes them unsuitable for writing streaming parsers
 
 ## Concepts
 

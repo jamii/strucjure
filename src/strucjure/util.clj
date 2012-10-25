@@ -16,9 +16,11 @@
         bindings (for [symbol scope
                        :when (contains? used symbol)]
                    [symbol `(get ~bindings-sym '~symbol)])]
-    `(fn [~input-sym ~bindings-sym]
-       (let [~@(apply concat bindings)]
-         ~src))))
+    `(vary-meta
+      (fn [~input-sym ~bindings-sym]
+        (let [~@(apply concat bindings)]
+          ~src))
+      assoc ~::src '~src)))
 
 (defn with-*ns* [sym]
   (symbol (str *ns* "/" sym)))

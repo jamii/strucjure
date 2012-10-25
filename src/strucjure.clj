@@ -12,12 +12,17 @@
 ;;   on-view would help with debugging
 ;; provide syntax for matching record literals #user.Foo{} and set literals
 ;; allow optional keys?
-;; think about extensibility - can copy graph library to make collection of late-bound views
+;; memoisation
+;; think about extensibility
+;;   can copy graph library to make collection of late-bound views
 ;; might want to truncate input/output/rest in error messages
 ;; better handling of strings
 ;;   strings are not instances of clojure.lang.Seqable :(
 ;;     but support seq...
 ;;   string patterns should be able to parse prefixes
+;; views and patterns can be unified
+;;   may make optimising/compiling easier
+;;   surprisingly, doesn't save much code
 
 (def run view/run-or-throw)
 

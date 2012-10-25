@@ -38,13 +38,13 @@
          (throw+ (PartialMatch. view input remaining output)))
        (throw+ (NoMatch. view input)))))
 
-(defrecord Import [view pattern]
+(defrecord Import [view-fun pattern]
   strucjure.pattern.AST
   (with-scope [this scope]
-    (pattern/pass-scope (fn [pattern] `(->Import (delay ~view) ~pattern)) pattern scope))
+    (pattern/pass-scope (fn [pattern] `(->Import (fn [] ~view-fun) ~pattern)) pattern scope))
   strucjure.pattern.Pattern
   (run* [this input bindings opts]
-    (when-let [[remaining output] (run (force view) input opts)]
+    (when-let [[remaining output] (run (view-fun) input)]
       (when-let [[remaining* new-bindings] (pattern/run pattern output bindings opts)]
         (when (nil? remaining*)
           [remaining new-bindings])))))

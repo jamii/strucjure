@@ -20,8 +20,8 @@
        (let [~@(apply concat bindings)]
          ~src))))
 
-(defn with-*ns* [symbol]
-  (symbol (str *ns* "/" symbol)))
+(defn with-*ns* [sym]
+  (symbol (str *ns* "/" sym)))
 
 (defn null-pre-view [name input]
   input)

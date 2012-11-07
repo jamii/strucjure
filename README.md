@@ -5,7 +5,7 @@ Leiningen couldn't handle the irony.
 ## Installation
 
 ```clojure
-[strucjure "0.3.0"]
+[strucjure "0.3.1"]
 ```
 
 ```clojure
@@ -242,7 +242,7 @@ Calls to class constructors will match instances of the class and additionally c
 user> (defrecord Foo [bear])
 user.Foo
 user> (run (pattern (Foo. ?bear)) (Foo. "imabear!"))
-({bear "imabear!"})
+{bear "imabear!"}
 user> (defrecord Bar [bear])
 user.Bar
 user> (run (pattern (Foo. ?bear)) (Bar. "imabear!"))

@@ -111,7 +111,7 @@
              bindings bindings]
         (if-let [[pattern & patterns] patterns]
           (when-let [[arg & args] args]
-            (when-let [[remaining & new-bindings] (run pattern arg bindings opts)]
+            (when-let [[remaining new-bindings] (run pattern arg bindings opts)]
               (when (nil? remaining)
                 (recur patterns args new-bindings))))
           [nil bindings])))))

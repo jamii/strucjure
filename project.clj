@@ -1,4 +1,4 @@
-(defproject strucjure "0.3.1"
+(defproject strucjure "0.3.2"
   :description "Pattern-matching, parsing and generic traversals via PEGs"
   :url "http://github.com/jamii/strucjure"
   :license {:name "LGPL"

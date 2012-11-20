@@ -280,7 +280,7 @@ user> (run (pattern [1 2 & ?x]) [1 2])
 {x nil}
 ```
 
-The special form 'prefix' behaves much like a vector but is allowed to match only the beginning of a sequence. This is useful when chaining parsers together (see eg the arith macro in the examples section below).
+The special form 'prefix' behaves much like a vector but is allowed to match only the beginning of a sequence. This is useful when chaining parsers together (see eg the math macro in the examples section below).
 
 ```clojure
 user> (run (pattern (prefix 1 2)) [1 2])
@@ -358,16 +358,11 @@ Operations on red-black trees:
 
 ;; Balance operation from http://www.cs.cornell.edu/courses/cs3110/2009sp/lectures/lec11.html
 (defview balance
-  (Black. ?z (Red. ?y (Red. ?x ?a ?b) ?c) ?d)
-  (Red. y (Black. x a b) (Black. z c d))
-
-  (Black. ?z (Red. ?x ?a (Red. ?y ?b ?c)) ?d)
-  (Red. y (Black. x a b) (Black. z c d))
-
-  (Black. ?x ?a (Red. ?z (Red. ?y ?b ?c)?d))
-  (Red. y (Black. x a b) (Black. z c d))
-
-  (Black. ?x ?a (Red. ?y ?b (Red. ?z ?c ?d)))
+  (or
+   (Black. ?z (Red. ?y (Red. ?x ?a ?b) ?c) ?d)
+   (Black. ?z (Red. ?x ?a (Red. ?y ?b ?c)) ?d)
+   (Black. ?x ?a (Red. ?z (Red. ?y ?b ?c) ?d))
+   (Black. ?x ?a (Red. ?y ?b (Red. ?z ?c ?d))))
   (Red. y (Black. x a b) (Black. z c d))
 
   ?other
@@ -377,27 +372,26 @@ Operations on red-black trees:
 A recursive descent parser with operator precedence:
 
 ```clojure
-user> (declare math-value math-mult-div math-plus-minus)
-#'user/math-plus-minus
-user> (def reserved? #{'* '/ '+ '-})
-#'user/reserved?
-user> (defview math-value
-  (prefix [(math-plus-minus ?x)]) x
-  (prefix (and (not reserved?) ?n)) n)
-#'user/math-value
-user> (defview math-mult-div
-  (prefix & (math-value ?x) '* & (math-mult-div ?y)) `(~'* ~x ~y)
-  (prefix & (math-value ?x) '/ & (math-mult-div ?y)) `(~'/ ~x ~y)
-  (prefix & (math-value ?x)) x)
-#'user/math-mult-div
-user> (defview math-plus-minus
-  (prefix & (math-mult-div ?x) '+ & (math-plus-minus ?y)) `(~'+ ~x ~y)
-  (prefix & (math-mult-div ?x) '- & (math-plus-minus ?y)) `(~'- ~x ~y)
-  (prefix & (math-mult-div ?x)) x)
-#'user/math-plus-minus
-user> (defmacro math [& tokens]
-  (run math-plus-minus tokens))
+user> (defn value? [all form]
+  (not-any? #(contains? % form) all))
+#'user/value?
+user> (defn bind* [all current]
+  (if-let [[ops & tighter] current]
+    (view
+     (prefix & ((bind* all tighter) ?x) (and #(contains? ops %) ?op) & ((bind* all current) ?y)) `(~op ~x ~y)
+     (prefix & ((bind* all tighter) ?x)) x)
+    (view
+     (prefix [((bind* all all) ?x)]) x
+     (prefix (and #(value? all %) ?x)) x)))
+#'user/bind*
+user> (defn bind [binding-levels]
+  (bind* binding-levels binding-levels))
+#'user/bind
+user> (defmacro math [& args]
+  (run (bind [#{'+ '-} #{'* '/}]) args))
 #'user/math
+user> (macroexpand '(math 1 - 2 + 3 - 4))
+(- 1 (+ 2 (- 3 4)))
 user> (macroexpand '(math 1 + 2 * 7 + 1 / 2))
 (+ 1 (+ (* 2 7) (/ 1 2)))
 user> (macroexpand '(math 1 + 2 * (7 + 1) / 2))

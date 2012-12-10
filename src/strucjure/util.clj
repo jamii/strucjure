@@ -20,7 +20,7 @@
       (fn [~input-sym ~bindings-sym]
         (let [~@(apply concat bindings)]
           ~src))
-      assoc ~::src '~src)))
+      assoc :strucjure/src '~src)))
 
 (defn with-*ns* [sym]
   (symbol (str *ns* "/" sym)))

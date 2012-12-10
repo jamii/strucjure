@@ -40,8 +40,11 @@
 
 (defrecord Import [view-fun pattern]
   strucjure.pattern.AST
+  (scope [this]
+    (pattern/scope pattern))
   (with-scope [this scope]
-    (pattern/pass-scope (fn [pattern] `(->Import (fn [] ~view-fun) ~pattern)) pattern scope))
+    ;; thunk for lazy evaluation without worrying about printing circular structure
+    `(->Import (fn [] ~view-fun) ~(pattern/with-scope pattern scope)))
   strucjure.pattern.Pattern
   (run* [this input bindings opts]
     (when-let [[remaining output] (run (view-fun) input opts)]

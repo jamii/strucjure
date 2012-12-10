@@ -36,6 +36,9 @@
 (defmacro defnpattern [& args]
   `(parser/defnpattern ~@args))
 
+(defn scope [pattern]
+  (:strucjure/scope (meta pattern)))
+
 (defmacro view [& args]
   `(parser/view ~@args))
 (defmacro defview [& args]

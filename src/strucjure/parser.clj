@@ -14,8 +14,9 @@
 
 (defmacro pattern [pattern-src]
   (let [pattern-ast (view/run-or-throw parse-pattern-ast pattern-src)
-        [pattern _] (pattern/with-scope pattern-ast #{})]
-    pattern))
+        pattern (pattern/with-scope pattern-ast #{})
+        scope (pattern/scope pattern-ast)]
+    `(vary-meta ~pattern assoc :strucjure.pattern/scope '~scope)))
 
 (defmacro defpattern [name pattern]
   `(def ~name (pattern/->Named '~(util/with-*ns* name) (pattern ~pattern))))
@@ -31,8 +32,8 @@
      [nil `(view/->Or
             ~(vec (for [[pattern-src result-src] (partition 2 pattern-srcs&result-srcs)]
                     (let [pattern-ast (view/run-or-throw parse-pattern-ast pattern-src opts)
-                          [pattern scope] (pattern/with-scope pattern-ast #{})
-                          result-fun (util/src-with-scope result-src scope)]
+                          pattern (pattern/with-scope pattern-ast #{})
+                          result-fun (util/src-with-scope result-src (pattern/scope pattern-ast))]
                       `(view/->Match ~pattern ~result-fun)))))])))
 
 (defmacro view [& pattern-srcs&result-srcs]
@@ -164,8 +165,8 @@
 (defview parse-match
   (prefix (->Head (view/->Import 'parse-pattern-ast (->Bind 'pattern-ast)))
           (->Head (->Bind 'result-src)))
-  (let [[pattern scope] (pattern/with-scope pattern-ast #{})
-        result-fun (util/src-with-scope result-src scope)]
+  (let [pattern (pattern/with-scope pattern-ast #{})
+        result-fun (util/src-with-scope result-src (pattern/scope pattern-ast))]
     `(view/->Match ~pattern ~result-fun)))
 
 (defview parse-view*
@@ -228,8 +229,8 @@
 
 (defview parse-match*
   (prefix (parse-pattern-ast ?pattern-ast) ?result-src)
-  (let [[pattern scope] (pattern/with-scope pattern-ast #{})
-        result-fun (util/src-with-scope result-src scope)]
+  (let [pattern (pattern/with-scope pattern-ast #{})
+        result-fun (util/src-with-scope result-src (pattern/scope pattern-ast))]
     `(view/->Match ~pattern ~result-fun)))
 
 (defview parse-view*

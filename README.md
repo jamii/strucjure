@@ -7,7 +7,7 @@ Leiningen couldn't handle the irony.
 ## Installation
 
 ```clojure
-[strucjure "0.3.4"]
+[strucjure "0.3.5"]
 ```
 
 ```clojure

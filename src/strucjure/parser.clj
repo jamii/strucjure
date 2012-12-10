@@ -16,7 +16,7 @@
   (let [pattern-ast (view/run-or-throw parse-pattern-ast pattern-src)
         pattern (pattern/with-scope pattern-ast #{})
         scope (pattern/scope pattern-ast)]
-    `(vary-meta ~pattern assoc :strucjure.pattern/scope '~scope)))
+    `(vary-meta ~pattern assoc :strucjure/scope '~scope)))
 
 (defmacro defpattern [name pattern]
   `(def ~name (pattern/->Named '~(util/with-*ns* name) (pattern ~pattern))))

@@ -22,7 +22,7 @@
   `(def ~name (pattern/->Named '~(util/with-*ns* name) (pattern ~pattern))))
 
 (defmacro defnpattern [name args pattern]
-  `(def ~name ~args (pattern/->Named '~(util/with-*ns* name) (pattern ~pattern))))
+  `(defn ~name ~args (pattern/->Named '~(util/with-*ns* name) (pattern ~pattern))))
 
 ;; will redef this later when bootstrapping
 (def parse-view

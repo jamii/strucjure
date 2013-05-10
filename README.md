@@ -1,5 +1,3 @@
- ![Alt text](http://imageshack.us/scaled/landing/801/strucjurefirstpass.jpg)
-
 Pattern-matching, parsing and generic traversals through the medium of [PEGs](http://en.wikipedia.org/wiki/Parsing_expression_grammar).
 
 Leiningen couldn't handle the irony.

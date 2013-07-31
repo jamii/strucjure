@@ -1,7 +1,34 @@
 (ns strucjure.pattern
-  (:require clojure.walk
-            [clojure.set :refer [union]]
+  (:require [clojure.set :refer [union]]
             [strucjure.pattern :refer [->Bind ->Or ->And]]))
+
+;; --- WALKS ---
+
+(defn walk
+  "Like clojure.walk/walk but works (inefficiently) on records"
+  [inner outer form]
+  (cond
+   (list? form) (outer (apply list (map inner form)))
+   (seq? form) (outer (doall (map inner form)))
+   (vector? form) (outer (vec (map inner form)))
+   (instance? clojure.lang.IRecord form) (outer (reduce (fn [form [k v]] (assoc form k (inner v))) form form))
+   (map? form) (outer (into (if (sorted? form) (sorted-map) {})
+                            (map inner form)))
+   (set? form) (outer (into (if (sorted? form) (sorted-set) #{})
+                            (map inner form)))
+   :else (outer form)))
+
+(defn walk-replace [form class->fn]
+  (if-let [replace-fn (class->fn (class form))]
+    (replace-fn form)
+    (walk #(walk-replace % class->fn) identity form)))
+
+(defn walk-collect [form classes]
+  (let [results (into {} (for [class classes] [class (atom [])]))
+        replace-fn (fn [class] (fn [form] (swap! (results (type form)) conj form)))
+        class->fn (into {} (for [class classes] [class (replace-fn class)]))]
+    (walk-replace form class->fn)
+    (into {} (for [[class forms] results] [class @forms]))))
 
 ;; --- STUBS ---
 ;; TODO use a version of walk that works on records
@@ -9,59 +36,59 @@
 (defrecord Succeed [output remaining bound])
 (defrecord Fail [])
 
-(defn set-stubs [form succeed-fn fail-fn]
-  (cond
-   (instance? Succeed form) (apply succeed-fn (vals form))
-   (instance? Fail form) (fail-fn)
-   :else (clojure.walk/walk #(set-stubs % succeed-fn fail-fn) identity form)))
+(defn set-stubs [bush succeed-fn fail-fn]
+  (walk-replace bush
+                {Succeed (fn [form] (apply succeed-fn (vals form)))
+                 Fail (fn [form] (apply fail-fn (vals form)))}))
 
-(defn get-stubs [form]
-  (let [succeeds (atom [])
-        fails (atom [])]
-    (set-stubs form #(swap! succeeds conj (->Succeed %1 %2 %3)) #(swap! fails conj (->Fail)))
-    [@succeeds @fails]))
+(defn get-stubs [bush]
+  (let [results (walk-collect bush #{Succeed Fail})]
+    [(results Succeed) (results Fail)]))
 
 ;; --- BINDINGS ---
-;; TODO use stubs and efficient local vars instead of atoms
+;; TODO use efficient local vars instead of atoms
 
-(defn get-binding [symbol]
-  `(deref ~symbol))
+(defrecord GetBinding [symbol])
+(defrecord SetBinding [symbol value])
 
-(defn set-binding [symbol value]
-  `(reset! ~symbol ~value))
-
-(defn with-bindings [symbols form]
-  `(let [~@(apply concat (for [symbol symbols] [symbol `(atom nil)]))]
-     ~form))
+(defn with-bindings [bush]
+  (let [bound (set (map :symbol (get (walk-collect bush #{GetBinding}) GetBinding)))]
+    `(let [~@(apply concat (for [symbol bound] [symbol `(atom nil)]))]
+       ~(walk-replace bush
+                      {GetBinding (fn [{:keys [symbol]}]
+                                    `(deref ~symbol))
+                       SetBinding (fn [{:keys [symbol value]}]
+                                    (when (bound symbol)
+                                      `(reset! ~symbol ~value)))}))))
 
 ;; --- BUSHES ---
 ;; bushes are trees with more than one success/fail path
 
-(defn bush->bound [bush]
+(defn bush->bound
   "The set of symbols that are bound if the bush succeeds"
+  [bush]
   (let [[succeeds _] (get-stubs bush)]
     (assert (= 1 (count (set (map :bound succeeds)))) "All success paths must bind the same set of symbols")
     (:bound (first succeeds))))
 
-(defn bush->tree [bush]
+(defn bush->tree
   "Reduce the number of success and failure paths to at most one each to avoid exponential branching"
+  [bush]
   (let [[succeeds fails] (get-stubs bush)]
     (cond
-     ;; already a tree
-     (and (<= (count succeeds) 1) (<= (count fails) 1))
+     (and (<= (count succeeds) 1) (<= (count fails) 1)) ;; already a tree
       bush
 
-     ;; different returns from different success paths - store results in a mutable var
-     :else
+     :else ;; store results in a binding
      (let [output-sym (gensym "output")
            remaining-sym (gensym "remaining")]
        `(if ~(set-stubs bush
                         (fn [output remaining _]
-                          `(do ~(set-binding output-sym output)
-                               ~(set-binding remaining-sym remaining)
+                          `(do ~(->SetBinding output-sym output)
+                               ~(->SetBinding remaining-sym remaining)
                                true))
                         (fn [] false))
-          ~(->Succeed (get-binding output-sym) (get-binding remaining-sym) (conj (bush->bound bush) output-sym remaining-sym))
+          ~(->Succeed (->GetBinding output-sym) (->GetBinding remaining-sym) (bush->bound bush))
           ~(->Fail))))))
 
 ;; --- COMPILER ---
@@ -117,10 +144,10 @@
   (pattern->tree [this input bound]
     (let [symbol (:symbol this)]
       (if (bound symbol)
-        `(if (= ~(get-binding symbol) ~input)
+        `(if (= ~(->GetBinding symbol) ~input)
            ~(->Succeed input nil bound)
            ~(->Fail))
-        `(do ~(set-binding symbol input)
+        `(do ~(->SetBinding symbol input)
              ~(->Succeed input nil (conj bound symbol))))))
   strucjure.pattern.And
   (pattern->tree [this input bound]
@@ -135,24 +162,19 @@
         ~(seq->bush this input bound)
         ~(->Fail)))))
 
-(defn pattern->tree-with-locals [pattern input bound]
-  (let [tree (pattern->tree pattern input bound)]
-    (with-bindings (bush->bound tree) tree)))
-
 (defn pattern->view [pattern]
   (let [input-sym (gensym "input")]
     `(fn [~input-sym]
-       ~(set-stubs (pattern->tree-with-locals pattern input-sym #{})
-                   (fn [output remaining bound]
-                     [output remaining])
-                   (fn []
-                     nil)))))
+       ~(with-bindings
+          (set-stubs (pattern->tree pattern input-sym #{})
+                     (fn [output remaining _]
+                       [output remaining])
+                     (fn []
+                       nil))))))
 
 ;; (pattern->tree-with-locals (->Bind 'a) 'input #{})
 ;; (pattern->tree-with-locals (->Bind 'a) 'input #{'a})
 ;; (and->bush [(->Bind 'a) (->Bind 'b)] 'input #{})
-;; (meta (->And [(->Bind 'a) (->Bind 'b)]))
-;; (command? 'and (->And [(->Bind 'a) (->Bind 'b)]))
 ;; (pattern->tree (->And [(->Bind 'a) 1]) 'input #{})
 ;; (pattern->tree (->And [(->Bind 'a) 1 2]) 'input #{})
 ;; (pattern->tree (->And [(->Bind 'a) (->Bind 'b)]) 'input #{})

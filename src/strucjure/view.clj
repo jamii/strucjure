@@ -162,15 +162,19 @@
         ~(seq->bush this input bound)
         ~(->Fail)))))
 
+;; TODO not sure I like the use of the dummy arg to decide whether output is produced
 (defn pattern->view [pattern]
-  (let [input-sym (gensym "input")]
-    `(fn [~input-sym]
-       ~(with-bindings
-          (set-stubs (pattern->tree pattern input-sym #{})
-                     (fn [output remaining _]
-                       [output remaining])
-                     (fn []
-                       nil))))))
+  (let [input-sym (gensym "input")
+        tree (pattern->tree pattern input-sym #{})]
+    `(fn
+       ([~input-sym]
+          ~(with-bindings (set-stubs tree
+                                     (fn [output remaining _] [remaining])
+                                     (fn [] nil))))
+       ([~input-sym ~'_]
+          ~(with-bindings (set-stubs tree
+                                     (fn [output remaining _] [output remaining])
+                                     (fn [] nil)))))))
 
 ;; (pattern->tree-with-locals (->Bind 'a) 'input #{})
 ;; (pattern->tree-with-locals (->Bind 'a) 'input #{'a})
@@ -186,6 +190,7 @@
 ;; (pattern->tree (list 1) 'input #{})
 ;; (pattern->tree (list 1 2) 'input #{})
 ;; ((eval (pattern->view (list 1 2))) (list 1 2))
+;; ((eval (pattern->view (list 1 2))) (list 1 2) nil)
 ;; ((eval (pattern->view (list 1 2))) (list 1))
 ;; ((eval (pattern->view (list 1 2))) (list 1 2 3))
 ;; ((eval (pattern->view (list 1 2))) (list 1 3))

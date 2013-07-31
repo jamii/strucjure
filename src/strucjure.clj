@@ -1,8 +1,6 @@
 (ns strucjure)
 
 ;; --- TODO ---
-;; how do we stop output from being evaled in bush->tree
-;;   (->Set/GetBinding ...) - if GetBinding is used anywhere, add binding and replace SetBinding with set
 ;; check nil on subpatterns
 ;; more datatypes
 ;; (pattern as sugar+common)
@@ -43,3 +41,7 @@
 ;; use match as compiler
 ;; later - run over generated code and remove (if _ true false) etc
 ;; tree is easy, use chunk for dag, use fns for cycles
+
+;; --- OPTIMISER ---
+;; (if _ true false) (if _ false true) (when _ true) etc
+;; (do nil & rest)

@@ -1,8 +1,9 @@
 (ns strucjure)
 
 ;; --- TODO ---
+;; how do we stop output from being evaled in bush->tree
+;;   (->Set/GetBinding ...) - if GetBinding is used anywhere, add binding and replace SetBinding with set
 ;; check nil on subpatterns
-;; seq patterns
 ;; more datatypes
 ;; (pattern as sugar+common)
 ;; (view as compiler)

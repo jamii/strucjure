@@ -51,12 +51,6 @@
      (and (<= (count succeeds) 1) (<= (count fails) 1))
       bush
 
-     ;; every success path returns the same output/remaining
-     (<= (count (set succeeds)) 1)
-     `(if ~(set-stubs bush (fn [_ _ _] true) (fn [] false))
-        ~(first succeeds)
-        ~(->Fail))
-
      ;; different returns from different success paths - store results in a mutable var
      :else
      (let [output-sym (gensym "output")
@@ -91,20 +85,27 @@
                  (fn [] (or->bush sub-patterns input bound)))
       (pattern->tree sub-pattern input bound))))
 
-(defrecord Rest [])
+(defn seq-rest->bush [sub-patterns output remaining bound]
+  (set-stubs (seq->bush sub-patterns remaining bound)
+             (fn [rest-output rest-remaining rest-bound]
+               (->Succeed (cons 'list (concat output (rest rest-output))) rest-remaining rest-bound))
+             ->Fail))
+
 (defn seq->bush [sub-patterns input bound]
   (if-let [[sub-pattern & sub-patterns] sub-patterns]
-    (if (instance? Rest sub-pattern)
-      (set-stubs (pattern->tree (:pattern sub-pattern) input bound)
-                 (fn [_ remaining bound] (seq->bush sub-patterns remaining bound))
+    (if (instance? strucjure.pattern.& sub-pattern)
+      (set-stubs (pattern->tree sub-pattern input bound)
+                 (partial seq-rest->bush sub-patterns)
                  ->Fail)
       (let [first-sym (gensym "first")
             rest-sym (gensym "rest")]
-        `(if-let [[~first-sym ~rest-sym] ~input]
+        `(if-let [[~first-sym & ~rest-sym] ~input]
            ~(set-stubs (pattern->tree sub-pattern first-sym bound)
-                       (fn [_ remaining bound] (seq->bush sub-patterns rest-sym bound))
+                       (fn [output _ bound]
+                         (seq-rest->bush sub-patterns (list output) rest-sym bound))
                        ->Fail)
-           ~(->Succeed nil input bound))))))
+           ~(->Fail))))
+    (->Succeed nil input bound)))
 
 (extend-protocol View
   Object
@@ -129,7 +130,10 @@
     (bush->tree (or->bush (:patterns this) input bound)))
   clojure.lang.ISeq
   (pattern->tree [this input bound]
-    (bush->tree (seq->bush this input bound))))
+    (bush->tree
+     `(if (instance? clojure.lang.Seqable ~input)
+        ~(seq->bush this input bound)
+        ~(->Fail)))))
 
 (defn pattern->tree-with-locals [pattern input bound]
   (let [tree (pattern->tree pattern input bound)]
@@ -157,3 +161,11 @@
 ;; ((eval (pattern->view (->And [(->Bind 'a) (->Bind 'b)]))) 1)
 ;; ((eval (pattern->view (->And [1 (->Bind 'b)]))) 1)
 ;; ((eval (pattern->view (->And [1 (->Bind 'b)]))) 2)
+;; (pattern->tree (list 1) 'input #{})
+;; (pattern->tree (list 1 2) 'input #{})
+;; ((eval (pattern->view (list 1 2))) (list 1 2))
+;; ((eval (pattern->view (list 1 2))) (list 1))
+;; ((eval (pattern->view (list 1 2))) (list 1 2 3))
+;; ((eval (pattern->view (list 1 2))) (list 1 3))
+;; ((eval (pattern->view (list 1 2))) [1 2])
+;; ((eval (pattern->view (list 1 2))) 1)

@@ -3,15 +3,16 @@
 ;; --- TODO ---
 ;; check nil on subpatterns
 ;; more datatypes
-;; (pattern as sugar+common)
-;; (view as compiler)
-;; pattern->view [output/Fail remaining] (provides cut)
+;; [output/Fail remaining] (provides cut)
 ;; ~fn ~var ~(invoke (pattern x y z)) ~(recur x y z)
 ;; sugar (raw/sour) (splicing)
 ;; tests
 ;; benchmark + optimise (proper locals?)
 
 ;; --- LATER ---
+;; revisit bindings
+;;   maybe use binding trick for let as well (LetBinding in bush->tree)
+;;   maybe use state machine like core.async
 ;; graph (extensible, memo, trampoline, inline etc)
 ;; useful error messages (deepest match?)
 ;; interactive debugger
@@ -28,6 +29,7 @@
 ;; various protocols give context sensitive behaviour
 ;; bush->tree trick made easier to unify whole compiler
 ;; using Fail allows safe cut
+;; motivation - http://journal.stuffwithstuff.com/2011/01/16/pattern-matching-in-a-dynamic-oop-language/
 
 ;; --- SCRATCH ---
 ;; symbol, !var, ?nullable

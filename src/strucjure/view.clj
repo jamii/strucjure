@@ -93,6 +93,13 @@
 
 ;; --- COMPILER ---
 
+(defn when-nil-remaining [remaining body]
+  (if (nil? remaining)
+    body
+    `(if (nil? ~remaining)
+       ~body
+       ~(->Fail))))
+
 (defprotocol View
   (pattern->decision [this input bound]))
 
@@ -100,7 +107,9 @@
   (let [[sub-pattern & sub-patterns] sub-patterns]
     (if sub-patterns
       (set-stubs (pattern->decision sub-pattern input bound)
-                 (fn [_ _ bound] (and->tree sub-patterns input bound))
+                 (fn [_ remaining bound]
+                   (when-nil-remaining remaining
+                                       (and->tree sub-patterns input bound)))
                  ->Fail)
       (pattern->decision sub-pattern input bound))))
 
@@ -109,7 +118,8 @@
     (if sub-patterns
       (set-stubs (pattern->decision sub-pattern input bound)
                  ->Succeed
-                 (fn [] (or->tree sub-patterns input bound)))
+                 (fn []
+                   (or->tree sub-patterns input bound)))
       (pattern->decision sub-pattern input bound))))
 
 (declare seq->tree)
@@ -124,14 +134,16 @@
   (if-let [[sub-pattern & sub-patterns] sub-patterns]
     (if (instance? strucjure.pattern.& sub-pattern)
       (set-stubs (pattern->decision sub-pattern input bound)
-                 (partial seq-rest->tree sub-patterns)
+                 (fn [output remaining bound]
+                   (seq-rest->tree sub-patterns output remaining bound))
                  ->Fail)
       (let [first-sym (gensym "first")
             rest-sym (gensym "rest")]
         `(if-let [[~first-sym & ~rest-sym] ~input]
            ~(set-stubs (pattern->decision sub-pattern first-sym bound)
-                       (fn [output _ bound]
-                         (seq-rest->tree sub-patterns (list output) rest-sym bound))
+                       (fn [output remaining bound]
+                         (when-nil-remaining remaining
+                                             (seq-rest->tree sub-patterns (list output) rest-sym bound)))
                        ->Fail)
            ~(->Fail))))
     (->Succeed nil input bound)))
@@ -165,6 +177,7 @@
         ~(->Fail)))))
 
 ;; TODO not sure I like the use of the dummy arg to decide whether output is produced
+;;      may be sufficient to always have a final output in views?
 (defn pattern->view [pattern]
   (let [input-sym (gensym "input")
         decision (pattern->decision pattern input-sym #{})]

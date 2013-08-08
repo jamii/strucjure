@@ -1,11 +1,12 @@
 (ns strucjure)
 
 ;; --- PROBLEMS ---
+;; compiler is ugly
 ;; binding syntax, esp in graph
 
 ;; --- TODO ---
+;; GetBinding still in output
 ;; more datatypes
-;; [output/Fail remaining] (provides cut)
 ;; ~fn ~var ~(invoke (pattern x y z)) ~(recur x y z)
 ;; sugar (raw/sour) (splicing)
 ;; =>, <=, &output, &remaining
@@ -16,6 +17,8 @@
 ;; revisit bindings
 ;;   maybe use binding trick for let as well (LetBinding in bush->tree)
 ;;   maybe use state machine like core.async
+;;   maybe use all mutables and use booleans for decisions
+;;   certainly add an intermediate representation
 ;; graph (extensible, memo, trampoline, inline etc)
 ;; useful error messages (deepest match?)
 ;; interactive debugger
@@ -24,16 +27,17 @@
 ;; string patterns, ~(chain "foo" "/" "bar"), may have to rethink seq patterns
 ;; binary patterns
 ;; reimplement core
+;; cut - maybe via [output/Fail remaining]
 
 ;; --- LESSONS ---
 ;; representation as plain data-structure, minimal syntax
-;; splice as data macro - wish clojure did this, julia got it right
+;; compile as late as possible
+;; unquote as data macro
 ;; placeholders instead of passing closures
-;; separate pattern, parser, view, graph
-;; various protocols give context sensitive behaviour
-;; bush->tree trick made easier to unify whole compiler
+;; bush->tree trick made it easier to unify whole compiler
 ;; using Fail allows safe cut
-;; motivation - http://journal.stuffwithstuff.com/2011/01/16/pattern-matching-in-a-dynamic-oop-language/
+;; writing use cases helps make decisions
+;; write the api without macros first
 
 ;; --- SCRATCH ---
 ;; symbol, !var, ?nullable

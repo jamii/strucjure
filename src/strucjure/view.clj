@@ -1,38 +1,8 @@
-(ns strucjure.pattern
+(ns strucjure.view
   (:require [clojure.set :refer [union]]
-            [plumbing.core :refer [for-map map-vals]]
-            [strucjure.pattern :refer [->Bind ->Or ->And]]))
-
-;; --- WALKS ---
-
-(defn walk
-  "Like clojure.walk/walk but works (inefficiently) on records"
-  [inner outer form]
-  (cond
-   (list? form) (outer (apply list (map inner form)))
-   (seq? form) (outer (doall (map inner form)))
-   (vector? form) (outer (vec (map inner form)))
-   (instance? clojure.lang.IRecord form) (outer (reduce (fn [form [k v]] (assoc form k (inner v))) form form))
-   (map? form) (outer (into (if (sorted? form) (sorted-map) {})
-                            (map inner form)))
-   (set? form) (outer (into (if (sorted? form) (sorted-set) #{})
-                            (map inner form)))
-   :else (outer form)))
-
-(defn walk-replace [form class->fn]
-  (if-let [replace-fn (class->fn (class form))]
-    (replace-fn form)
-    (walk #(walk-replace % class->fn) identity form)))
-
-(defn walk-collect [form classes]
-  (let [results (for-map [class classes] class (atom []))
-        replace-fn (fn [class] (fn [form] (swap! (results (type form)) conj form)))
-        class->fn (for-map [class classes] class (replace-fn class))]
-    (walk-replace form class->fn)
-    (map-vals deref results)))
+            [strucjure.util :refer [walk-replace walk-collect]]))
 
 ;; --- STUBS ---
-;; TODO use a version of walk that works on records
 
 (defrecord Succeed [output remaining bound])
 (defrecord Fail [])
@@ -101,7 +71,7 @@
        ~body
        ~(->Fail))))
 
-(defprotocol View
+(defprotocol IView
   (pattern->decision [this input bound]))
 
 (defn and->tree [sub-patterns input bound]
@@ -149,10 +119,22 @@
            ~(->Fail))))
     (->Succeed nil input bound)))
 
-(extend-protocol View
+(defn view->decision [view input bound]
+  (let [output-sym (gensym "output")
+        remaining-sym (gensym "remaining")]
+    `(if-let [[~output-sym ~remaining-sym] (~view ~input)]
+       ~(->Succeed output-sym remaining-sym bound)
+       ~(->Fail))))
+
+(extend-protocol IView
   Object
   (pattern->decision [this input bound]
     `(if (= ~input ~this)
+       ~(->Succeed input nil bound)
+       ~(->Fail)))
+  clojure.lang.Symbol
+  (pattern->decision [this input bound]
+    `(if (= ~input '~this)
        ~(->Succeed input nil bound)
        ~(->Fail)))
   strucjure.pattern.Bind
@@ -175,32 +157,46 @@
     (tree->decision
      `(if (instance? clojure.lang.Seqable ~input)
         ~(seq->tree this input bound)
-        ~(->Fail)))))
+        ~(->Fail))))
+  clojure.lang.Fn ;; a view
+  (pattern->decision [this input bound]
+    (view->decision this input bound))
+  clojure.lang.Var ;; a var pointing to a view
+  (pattern->decision [this input bound]
+    (view->decision this input bound)))
 
-(defn pattern->view [pattern]
-  (let [input-sym (gensym "input")
-        decision (pattern->decision pattern input-sym #{})]
-    `(fn [~input-sym]
-       ~(with-bindings (set-stubs decision
-                                  (fn [output remaining _] [output remaining])
-                                  (fn [] nil))))))
+(defn pattern->view
+  ([pattern]
+     (pattern->view 'fn pattern))
+  ([name pattern]
+     (let [input-sym (gensym "input")
+           decision (pattern->decision pattern input-sym #{})]
+       `(~name [~input-sym]
+               ~(with-bindings (set-stubs decision
+                                          (fn [output remaining _] [output remaining])
+                                          (fn [] nil)))))))
 
-;; (pattern->decision-with-locals (->Bind 'a) 'input #{})
-;; (pattern->decision-with-locals (->Bind 'a) 'input #{'a})
-;; (and->tree [(->Bind 'a) (->Bind 'b)] 'input #{})
-;; (pattern->decision (->And [(->Bind 'a) 1]) 'input #{})
-;; (pattern->decision (->And [(->Bind 'a) 1 2]) 'input #{})
-;; (pattern->decision (->And [(->Bind 'a) (->Bind 'b)]) 'input #{})
-;; (pattern->decision-with-locals (->And [(->Bind 'a) (->Bind 'b)]) 'input #{})
-;; (pattern->view (->And [(->Bind 'a) (->Bind 'b)]))
-;; ((eval (pattern->view (->And [(->Bind 'a) (->Bind 'b)]))) 1)
-;; ((eval (pattern->view (->And [1 (->Bind 'b)]))) 1)
-;; ((eval (pattern->view (->And [1 (->Bind 'b)]))) 2)
-;; (pattern->decision (list 1) 'input #{})
-;; (pattern->decision (list 1 2) 'input #{})
-;; ((eval (pattern->view (list 1 2))) (list 1 2))
-;; ((eval (pattern->view (list 1 2))) (list 1))
-;; ((eval (pattern->view (list 1 2))) (list 1 2 3))
-;; ((eval (pattern->view (list 1 2))) (list 1 3))
-;; ((eval (pattern->view (list 1 2))) [1 2])
-;; ((eval (pattern->view (list 1 2))) 1)
+(comment
+  (use 'strucjure.pattern)
+  (pattern->decision-with-locals (->Bind 'a) 'input #{})
+  (pattern->decision-with-locals (->Bind 'a) 'input #{'a})
+  (and->tree [(->Bind 'a) (->Bind 'b)] 'input #{})
+  (pattern->decision (->And [(->Bind 'a) 1]) 'input #{})
+  (pattern->decision (->And [(->Bind 'a) 1 2]) 'input #{})
+  (pattern->decision (->And [(->Bind 'a) (->Bind 'b)]) 'input #{})
+  (pattern->decision-with-locals (->And [(->Bind 'a) (->Bind 'b)]) 'input #{})
+  (pattern->view (->And [(->Bind 'a) (->Bind 'b)]))
+  ((eval (pattern->view (->And [(->Bind 'a) (->Bind 'b)]))) 1)
+  ((eval (pattern->view (->And [1 (->Bind 'b)]))) 1)
+  ((eval (pattern->view (->And [1 (->Bind 'b)]))) 2)
+  (pattern->decision (list 1) 'input #{})
+  (pattern->decision (list 1 2) 'input #{})
+  ((eval (pattern->view (list 1 2))) (list 1 2))
+  ((eval (pattern->view (list 1 2))) (list 1))
+  ((eval (pattern->view (list 1 2))) (list 1 2 3))
+  ((eval (pattern->view (list 1 2))) (list 1 3))
+  ((eval (pattern->view (list 1 2))) [1 2])
+  ((eval (pattern->view (list 1 2))) 1)
+  (let [a (eval (pattern->view 1))] (pattern->view (list a 2)))
+  (let [a (eval (pattern->view 1))] ((eval (pattern->view (list a 2))) [1 2 3]))
+)

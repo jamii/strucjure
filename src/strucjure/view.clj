@@ -1,5 +1,6 @@
 (ns strucjure.pattern
   (:require [clojure.set :refer [union]]
+            [plumbing.core :refer [for-map map-vals]]
             [strucjure.pattern :refer [->Bind ->Or ->And]]))
 
 ;; --- WALKS ---
@@ -24,11 +25,11 @@
     (walk #(walk-replace % class->fn) identity form)))
 
 (defn walk-collect [form classes]
-  (let [results (into {} (for [class classes] [class (atom [])]))
+  (let [results (for-map [class classes] class (atom []))
         replace-fn (fn [class] (fn [form] (swap! (results (type form)) conj form)))
-        class->fn (into {} (for [class classes] [class (replace-fn class)]))]
+        class->fn (for-map [class classes] class (replace-fn class))]
     (walk-replace form class->fn)
-    (into {} (for [[class forms] results] [class @forms]))))
+    (map-vals deref results)))
 
 ;; --- STUBS ---
 ;; TODO use a version of walk that works on records

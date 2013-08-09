@@ -19,18 +19,20 @@
 ;; --- BINDINGS ---
 ;; TODO use efficient local vars instead of atoms
 
-(defrecord GetBinding [symbol])
-(defrecord SetBinding [symbol value])
+(defrecord Get [symbol])
+(defrecord Set [symbol value])
 
 (defn with-bindings [tree]
-  (let [bound (set (map :symbol (get (walk-collect tree #{GetBinding}) GetBinding)))]
-    `(let [~@(apply concat (for [symbol bound] [symbol `(atom nil)]))]
+  (let [bound (set (map :symbol (get (walk-collect tree #{Get}) Get)))
+        indexes (zipmap bound (range))
+        bindings-sym (gensym "bindings")]
+    `(let [~bindings-sym (object-array ~(count bound))]
        ~(walk-replace tree
-                      {GetBinding (fn [{:keys [symbol]}]
-                                    `(deref ~symbol))
-                       SetBinding (fn [{:keys [symbol value]}]
+                      {Get (fn [{:keys [symbol]}]
+                                    `(aget ~bindings-sym ~(indexes symbol)))
+                       Set (fn [{:keys [symbol value]}]
                                     (when (bound symbol)
-                                      `(reset! ~symbol ~value)))}))))
+                                      `(aset ~bindings-sym ~(indexes symbol) ~value)))}))))
 
 ;; --- TREES ---
 ;; trees are decisions with more than one success/fail path
@@ -55,11 +57,11 @@
            remaining-sym (gensym "remaining")]
        `(if ~(set-stubs tree
                         (fn [output remaining _]
-                          `(do ~(->SetBinding output-sym output)
-                               ~(->SetBinding remaining-sym remaining)
+                          `(do ~(->Set output-sym output)
+                               ~(->Set remaining-sym remaining)
                                true))
                         (fn [] false))
-          ~(->Succeed (->GetBinding output-sym) (->GetBinding remaining-sym) (tree->bound tree))
+          ~(->Succeed (->Get output-sym) (->Get remaining-sym) (tree->bound tree))
           ~(->Fail))))))
 
 ;; --- COMPILER ---
@@ -141,10 +143,10 @@
   (pattern->decision [this input bound]
     (let [symbol (:symbol this)]
       (if (bound symbol)
-        `(if (= ~(->GetBinding symbol) ~input)
+        `(if (= ~(->Get symbol) ~input)
            ~(->Succeed input nil bound)
            ~(->Fail))
-        `(do ~(->SetBinding symbol input)
+        `(do ~(->Set symbol input)
              ~(->Succeed input nil (conj bound symbol))))))
   strucjure.pattern.And
   (pattern->decision [this input bound]
@@ -185,12 +187,14 @@
   (pattern->decision (->And [(->Bind 'a) 1 2]) 'input #{})
   (pattern->decision (->And [(->Bind 'a) (->Bind 'b)]) 'input #{})
   (pattern->decision-with-locals (->And [(->Bind 'a) (->Bind 'b)]) 'input #{})
+  (pattern->decision (->And [(->Bind 'a) (->Bind 'b)]) 'input #{})
   (pattern->view (->And [(->Bind 'a) (->Bind 'b)]))
   ((eval (pattern->view (->And [(->Bind 'a) (->Bind 'b)]))) 1)
   ((eval (pattern->view (->And [1 (->Bind 'b)]))) 1)
   ((eval (pattern->view (->And [1 (->Bind 'b)]))) 2)
   (pattern->decision (list 1) 'input #{})
   (pattern->decision (list 1 2) 'input #{})
+  (pattern->view (list 1))
   ((eval (pattern->view (list 1 2))) (list 1 2))
   ((eval (pattern->view (list 1 2))) (list 1))
   ((eval (pattern->view (list 1 2))) (list 1 2 3))

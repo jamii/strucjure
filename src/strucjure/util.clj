@@ -19,12 +19,14 @@
 
 (defn walk-replace [form class->fn]
   (if-let [replace-fn (class->fn (class form))]
-    (replace-fn form)
+    (walk-replace (replace-fn form) class->fn)
     (walk #(walk-replace % class->fn) identity form)))
 
 (defn walk-collect [form classes]
-  (let [results (for-map [class classes] class (atom []))
-        replace-fn (fn [class] (fn [form] (swap! (results (type form)) conj form)))
-        class->fn (for-map [class classes] class (replace-fn class))]
-    (walk-replace form class->fn)
-    (map-vals deref results)))
+  (let [results (for-map [class classes] class (atom []))]
+    (letfn [(walk-collect-loop [form]
+              (when (contains? classes form)
+                (swap! (results class) conj form))
+              (walk walk-collect-loop identity form))]
+      (walk-collect-loop form)
+      (map-vals deref results))))

@@ -8,6 +8,8 @@
 ;; GetBinding still in output
 ;; more datatypes
 ;; ~fn ~var ~(invoke (pattern x y z)) ~(recur x y z)
+;; use meta for bindings in sugar (requires (->Bind name rest))
+;; have ->Node create &binding
 ;; sugar (raw/sour) (splicing)
 ;; =>, <=, &output, &remaining
 ;; tests
@@ -20,6 +22,9 @@
 ;;   maybe use all mutables and use booleans for decisions
 ;;   certainly add an intermediate representation
 ;; graph (extensible, memo, trampoline, inline etc)
+;; use fns in graph for now, later use (let [stack [[array state]] (loop [parent-array return-state output-index]))
+;; cut
+;;   pass erasable state down from try, return result=true/false/(cut result)?
 ;; useful error messages (deepest match?)
 ;; interactive debugger
 ;; reversible patterns
@@ -27,15 +32,14 @@
 ;; string patterns, ~(chain "foo" "/" "bar"), may have to rethink seq patterns
 ;; binary patterns
 ;; reimplement core
-;; cut - maybe via [output/Fail remaining]
 
 ;; --- LESSONS ---
 ;; representation as plain data-structure, minimal syntax
 ;; compile as late as possible
+;; view/pattern interplay allows injecting other kinds of parsers
 ;; unquote as data macro
 ;; placeholders instead of passing closures
 ;; bush->tree trick made it easier to unify whole compiler
-;; using Fail allows safe cut
 ;; writing use cases helps make decisions
 ;; write the api without macros first
 
@@ -103,6 +107,20 @@
      non-nullable-binding ~(s/is non-nullable-binding? &input)
      symbol ~(s/is symbol? &input)))
 
+  (def pattern-pattern
+    (s/graph
+     pattern ~(s/with-meta {:type ~binding} ~unbound-pattern)
+     unbound-pattern ~(s/or ~unquote ~seq ~vec ~symbol _)
+     unquote (clojure.core/unquote _)
+     seq (& * & elem)
+     vec [& * & elem]
+     elem ~(s/or (~pattern) (~unquote-splicing) ~parser)
+     parser ~(s/or ~'* ~'+ ~'? ~'&)
+     binding ~(s/or ~nullable-binding ~non-nullable-binding)
+     nullable-binding ~(s/is nullable-binding? &input)
+     non-nullable-binding ~(s/is non-nullable-binding? &input)
+     symbol ~(s/is symbol? &input)))
+
   (def desugar-pattern
     (s/update-graph pattern-pattern
                     unquote (s/=> ~% (_ ?body) ~body)
@@ -112,3 +130,8 @@
 
   ;; still need to think about bindings
 )
+
+;; (->Get name) (->Set name value) (->Bind name value)
+;; (pattern->decision [this input output remaining bound])
+;; return true/false
+;; (let [[output remaining bound] (gen-pattern->decision pattern input)] ...)

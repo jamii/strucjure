@@ -13,17 +13,6 @@
 (defrecord Equal [left right])
 (defrecord Test [form])
 
-(defn constant? [form]
-  (let [constant (atom true)]
-    (clojure.walk/prewalk
-     (fn [form]
-       (if (list? form)
-         (when (not= 'quote (first form))
-           (reset! constant false))
-         form))
-     form)
-    @constant))
-
 (defn binds [flow]
   (condp = (type flow)
     And (apply union (map binds (:flows flow)))
@@ -55,17 +44,20 @@
       Test (->Test (replace (:form flow)))
       nil nil)))
 
-(defn propagate-constants* [[flow body]]
-  (let [constant-lets (filter #(and (symbol? (:binding %)) (constant? (:value %))) (lets flow))
-        sym->value (for-map [constant-let constant-lets] (:binding constant-let) (:value constant-let))]
+(defn simple? [form]
+  (or (nil? form) (symbol? form)))
+
+(defn propagate-simples* [[flow body]]
+  (let [simple-lets (filter #(and (symbol? (:binding %)) (simple? (:value %))) (lets flow))
+        sym->value (for-map [simple-let simple-lets] (:binding simple-let) (:value simple-let))]
     [(-> flow
-         (remove-flows (set constant-lets))
+         (remove-flows (set simple-lets))
          (replace-syms sym->value))
      (clojure.walk/prewalk-replace sym->value body)]))
 
-(defn propagate-constants [flow body]
+(defn propagate-simples [flow body]
   (loop [val [flow body]]
-    (let [new-val (propagate-constants* val)]
+    (let [new-val (propagate-simples* val)]
       (if (= val new-val)
         new-val
         (recur new-val)))))
@@ -74,8 +66,8 @@
   (condp = (type flow)
     And (->And (map preeval-equals (:flows flow)))
     Or (->Or (map preeval-equals (:flows flow)))
-    Equal (when-not (and (constant? (:left flow))
-                         (constant? (:right flow))
+    Equal (when-not (and (simple? (:left flow))
+                         (simple? (:right flow))
                          (= (:left flow) (:right flow)))
             flow)
     flow))
@@ -121,7 +113,7 @@
     Test `(when ~(:form flow) ~body)))
 
 (defn flow->clj [flow body]
-  (let [[flow body] (propagate-constants flow body)
+  (let [[flow body] (propagate-simples flow body)
         flow (preeval-equals flow)
         clj (flow->clj* flow body)
         clj (collapse-when clj)]
@@ -130,8 +122,6 @@
 (comment
   (use 'clojure.stacktrace)
   ;; (pattern (1 2))
-  (constant? '{:a 1 :b [2 3 '(for [x y] x)]})
-  (constant? '{:a 1 :b [2 3 (+ 4 5)]})
   (def a (->And [(->Test '(seq? input))
                  (->And [(->Test '(not (nil? input)))
                          (->Let '[first_1 rest_1] 'input)

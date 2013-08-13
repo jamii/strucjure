@@ -1,75 +1,79 @@
 (ns strucjure.flow
-  (:require [clojure.set :refer [union]]
+  (:require [clojure.set :refer [intersection union]]
             [strucjure.util :as util]))
 
+(defn when->clj [form body]
+  (cond
+   (= true body) form
+   (= false body) false
+   :else `(when ~form ~body)))
+
 (defprotocol IFlow
-  (restrict [this syms] "Remove bindings which are not transitively depended on by syms and are not needed by a test")
-  (flow->clj [this body] "A clj form which returns body on success or nil/false on failure"))
+  (binds [this]
+    "The set of symbols bound by this flow")
+  (flow->clj [this body]
+    "A clj form which returns body on success or nil/false on failure."))
 
 (extend-protocol IFlow
   nil ;; makes it easy to nil out nested flows
-  (restrict [this syms]
-    this)
+  (binds [this]
+    #{})
   (flow->clj [this body]
     body))
 
-(defn when-flow [form body]
-  (cond
-   (= true body) form
-   (= false body) `(not ~form)
-   :else `(when ~form ~body)))
-
 (defrecord And [flows]
   IFlow
-  (restrict [this syms]
-    (->And (reverse (map #(restrict % syms) (reverse flows)))))
+  (binds [this]
+    (apply union (map binds flows)))
   (flow->clj [this body]
     (if-let [[flow & flows] flows]
       (flow->clj flow (flow->clj (->And flows) body))
       body)))
 
-(defrecord LetOr [syms flows]
+;; TODO test this against the naive version once we have some realistic patterns
+(defrecord Or [flows]
   IFlow
-  (restrict [this syms]
-    ;; LetOr branches cannot share bindings so no need to run restrict in parallel
-    (->LetOr (filter @syms syms) (map #(restrict % syms) flows)))
-  (flow->clj [this body] ;; TODO can optimise if no Let/LetOr in flows
-    (if (empty? syms)
-      (when-flow `(or ~@(for [flow flows] (flow->clj flow true)))
-                 body)
-      `(when-let [~(vec syms) (or ~@(for [flow flows] (flow->clj flow (vec syms))))]
-         ~body))))
-
-(defrecord Let [binding value]
-  IFlow
-  (restrict [this syms]
-    (when (some @syms (util/syms binding))
-      (swap! syms union (util/syms value))
-      this))
+  (binds [this]
+    (apply intersection (map binds flows)))
   (flow->clj [this body]
-    `(let [~binding ~value]
-       ~body)))
+    (let [flows-syms (for [flow flows]
+                       ;; these are the syms which the body can observe from the flow
+                       (intersection (binds flow) (util/syms body)))
+          syms (first flows-syms)]
+      ;; this should already have been checked in strucjure.pattern, but best be sure
+      (assert (every? #(= syms %) flows-syms) "All flows in an Or must export the same set of symbols")
+      (if (empty? syms)
+        ;; this is the easy case
+        (when->clj `(or ~@(for [flow flows] (flow->clj flow true)))
+                   body)
+        ;; otherise have to export some symbols from the (or ...)
+        `(when-let [~(vec syms) (or ~@(for [flow flows] (flow->clj flow (vec syms))))]
+           ~body)))))
+
+(defrecord Let [binding value] ;; value must not cause side-effects
+  IFlow
+  (binds [this]
+    (util/syms binding))
+  (flow->clj [this body]
+    (if (some (util/syms binding) (util/syms body)) ;; if this binding is used anywhere
+      `(let [~binding ~value] ~body)
+      body)))
 
 (defrecord Constant [sym value]
   IFlow
-  (restrict [this syms]
-    (swap! syms conj sym)
-    this)
+  (binds [this]
+    #{})
   (flow->clj [this body]
     (if (and (not (symbol? sym)) (= sym value))
       body
-      (when-flow `(= ~sym ~value) body))))
+      (when->clj `(= ~sym ~value) body))))
 
 (defrecord Test [form]
   IFlow
-  (restrict [this syms]
-    (swap! syms union (util/syms form))
-    this)
+  (binds [this]
+    #{})
   (flow->clj [this body]
-    (when-flow form body)))
-
-(defn flow->restrict->clj [flow body]
-  (flow->clj (restrict flow (atom (util/syms body))) body))
+    (when->clj form body)))
 
 (comment
   (use 'clojure.stacktrace)
@@ -91,7 +95,11 @@
   (let [syms (atom #{'output 'remaining})] [(restrict a syms) @syms])
   (= a (restrict a (atom #{'output 'remaining})))
   (restrict a (atom #{'remaining}))
-  (flow->restrict->clj a '[remaining output])
-  (flow->restrict->clj a '[remaining])
-  (flow->restrict->clj a true)
+  (flow->clj a '[remaining output])
+  (flow->clj a '[remaining])
+  (flow->clj a true)
+  (flow->clj (->Or [(->Constant 'input 1) (->Constant 'input 2)]) true)
+  (flow->clj (->Or [(->And [(->Let 'output 'input) (->Constant 'input 1)])
+                    (->And [(->Let 'output 'input) (->Constant 'input 2)])])
+             ['output])
 )

@@ -1,105 +1,155 @@
 (ns strucjure.flow
   (:require [clojure.set :refer [intersection union]]
+            [clojure.walk :refer [walk]]
+            [plumbing.core :refer [for-map]]
             [strucjure.util :as util]))
 
-(defn when->clj [form body]
+;; TODO could probably simplify some of this by using the clj analyser to track bindings
+
+;; the clj forms in these records must not cause side-effects
+(defrecord And [flows])
+(defrecord Or [flows])
+(defrecord Let [binding value])
+(defrecord Equal [left right])
+(defrecord Test [form])
+
+(defn constant? [form]
+  (let [constant (atom true)]
+    (clojure.walk/prewalk
+     (fn [form]
+       (if (list? form)
+         (when (not= 'quote (first form))
+           (reset! constant false))
+         form))
+     form)
+    @constant))
+
+(defn binds [flow]
+  (condp = (type flow)
+    And (apply union (map binds (:flows flow)))
+    Or (apply intersection (map binds (:flows flow)))
+    Let (util/syms (:binding flow)) ;; TODO this is a bit inaccurate
+    #{}))
+
+(defn lets [flow]
+  (condp = (type flow)
+    And (apply union (map lets (:flows flow)))
+    Or (apply union (map lets (:flows flow)))
+    Let #{flow}
+    #{}))
+
+(defn remove-flows [flow flows]
+  (when-not (contains? flows flow)
+    (condp = (type flow)
+      And (->And (map #(remove-flows % flows) (:flows flow)))
+      Or (->Or (map #(remove-flows % flows) (:flows flow)))
+      flow)))
+
+(defn replace-syms [flow sym->value]
+  (let [replace #(clojure.walk/prewalk-replace sym->value %)]
+    (condp = (type flow)
+      And (->And (map #(replace-syms % sym->value) (:flows flow)))
+      Or (->Or (map #(replace-syms % sym->value) (:flows flow)))
+      Let (->Let (:binding flow) (replace (:value flow)))
+      Equal (->Equal (replace (:left flow)) (replace (:right flow)))
+      Test (->Test (replace (:form flow)))
+      nil nil)))
+
+(defn propagate-constants* [[flow body]]
+  (let [constant-lets (filter #(and (symbol? (:binding %)) (constant? (:value %))) (lets flow))
+        sym->value (for-map [constant-let constant-lets] (:binding constant-let) (:value constant-let))]
+    [(-> flow
+         (remove-flows (set constant-lets))
+         (replace-syms sym->value))
+     (clojure.walk/prewalk-replace sym->value body)]))
+
+(defn propagate-constants [flow body]
+  (loop [val [flow body]]
+    (let [new-val (propagate-constants* val)]
+      (if (= val new-val)
+        new-val
+        (recur new-val)))))
+
+(defn preeval-equals [flow]
+  (condp = (type flow)
+    And (->And (map preeval-equals (:flows flow)))
+    Or (->Or (map preeval-equals (:flows flow)))
+    Equal (when-not (and (constant? (:left flow))
+                         (constant? (:right flow))
+                         (= (:left flow) (:right flow)))
+            flow)
+    flow))
+
+(defn collapse-when* [form]
   (cond
-   (= true body) form
-   (= false body) false
-   :else `(when ~form ~body)))
+   (and (seq? form) (= `when (nth form 0)) (= true (nth form 2))) (nth form 1)
+   (and (seq? form) (= `when (nth form 0)) (= true (nth form 1))) (nth form 2)
+   :else form))
 
-(defprotocol IFlow
-  (binds [this]
-    "The set of symbols bound by this flow")
-  (flow->clj [this body]
-    "A clj form which returns body on success or nil/false on failure."))
+(defn collapse-when [form]
+  (clojure.walk/postwalk collapse-when* form))
 
-(extend-protocol IFlow
-  nil ;; makes it easy to nil out nested flows
-  (binds [this]
-    #{})
-  (flow->clj [this body]
-    body))
+(defn flow->clj* [flow body]
+  (condp = (type flow)
+    nil body
 
-(defrecord And [flows]
-  IFlow
-  (binds [this]
-    (apply union (map binds flows)))
-  (flow->clj [this body]
-    (if-let [[flow & flows] flows]
-      (flow->clj flow (flow->clj (->And flows) body))
-      body)))
+    And (if-let [[sub-flow & sub-flows] (:flows flow)]
+          (flow->clj* sub-flow (flow->clj* (->And sub-flows) body))
+          body)
 
-;; TODO test this against the naive version once we have some realistic patterns
-(defrecord Or [flows]
-  IFlow
-  (binds [this]
-    (apply intersection (map binds flows)))
-  (flow->clj [this body]
-    (let [flows-syms (for [flow flows]
-                       ;; these are the syms which the body can observe from the flow
-                       (intersection (binds flow) (util/syms body)))
-          syms (first flows-syms)]
-      ;; this should already have been checked in strucjure.pattern, but best be sure
-      (assert (every? #(= syms %) flows-syms) "All flows in an Or must export the same set of symbols")
-      (if (empty? syms)
-        ;; this is the easy case
-        (when->clj `(or ~@(for [flow flows] (flow->clj flow true)))
-                   body)
-        ;; otherise have to export some symbols from the (or ...)
-        `(when-let [~(vec syms) (or ~@(for [flow flows] (flow->clj flow (vec syms))))]
-           ~body)))))
+    ;; TODO test this against the naive version once we have some realistic patterns
+    Or (let [sub-flows-syms (for [sub-flow (:flows flow)]
+                              ;; these are the syms which the body can observe from the flow
+                              (intersection (binds sub-flow) (util/syms body)))
+             flow-syms (first sub-flows-syms)]
+         ;; this should already have been checked in strucjure.pattern, but best be sure
+         (assert (every? #(= flow-syms %) sub-flows-syms) "All flows in an Or must bind the same set of symbols")
+         (if (empty? flow-syms)
+           ;; this is the easy case
+           `(when (or ~@(for [sub-flow (:flows flow)] (flow->clj* sub-flow true)))
+              ~body)
+           ;; otherise have to export some symbols from the (or ...)
+           `(when-let [~(vec flow-syms) (or ~@(for [sub-flow (:flows flow)] (flow->clj* sub-flow (vec flow-syms))))]
+              ~body)))
 
-(defrecord Let [binding value] ;; value must not cause side-effects
-  IFlow
-  (binds [this]
-    (util/syms binding))
-  (flow->clj [this body]
-    (if (some (util/syms binding) (util/syms body)) ;; if this binding is used anywhere
-      `(let [~binding ~value] ~body)
-      body)))
+    Let (if (some (util/syms (:binding flow)) (util/syms body)) ;; if flow binding is used anywhere
+          `(let [~(:binding flow) ~(:value flow)] ~body)
+          body)
 
-(defrecord Constant [sym value]
-  IFlow
-  (binds [this]
-    #{})
-  (flow->clj [this body]
-    (if (and (not (symbol? sym)) (= sym value))
-      body
-      (when->clj `(= ~sym ~value) body))))
+    Equal `(when (= ~(:left flow) ~(:right flow)) ~body)
 
-(defrecord Test [form]
-  IFlow
-  (binds [this]
-    #{})
-  (flow->clj [this body]
-    (when->clj form body)))
+    Test `(when ~(:form flow) ~body)))
+
+(defn flow->clj [flow body]
+  (let [[flow body] (propagate-constants flow body)
+        flow (preeval-equals flow)
+        clj (flow->clj* flow body)
+        clj (collapse-when clj)]
+    clj))
 
 (comment
   (use 'clojure.stacktrace)
   ;; (pattern (1 2))
+  (constant? '{:a 1 :b [2 3 '(for [x y] x)]})
+  (constant? '{:a 1 :b [2 3 (+ 4 5)]})
   (def a (->And [(->Test '(seq? input))
                  (->And [(->Test '(not (nil? input)))
                          (->Let '[first_1 rest_1] 'input)
-                         (->Constant 'first_1 1)
+                         (->Equal 'first_1 1)
                          (->Let 'output_1 'first_1)
                          (->Let 'remaining_1 'rest_1)])
                  (->And [(->Test '(not (nil? remaining_1)))
                          (->Let '[first_2 rest_2] 'rest_1)
-                         (->Constant 'first_2 2)
+                         (->Equal 'first_2 2)
                          (->Let 'output_2 'first_2)
                          (->Let 'remaining_2 'rest_2)])
                  (->Let 'remaining 'remaining_2)
                  (->Let 'output '(list output_1 output_2))]))
-  (flow->clj a '[output remaining])
-  (let [syms (atom #{'output 'remaining})] [(restrict a syms) @syms])
-  (= a (restrict a (atom #{'output 'remaining})))
-  (restrict a (atom #{'remaining}))
   (flow->clj a '[remaining output])
   (flow->clj a '[remaining])
   (flow->clj a true)
-  (flow->clj (->Or [(->Constant 'input 1) (->Constant 'input 2)]) true)
-  (flow->clj (->Or [(->And [(->Let 'output 'input) (->Constant 'input 1)])
-                    (->And [(->Let 'output 'input) (->Constant 'input 2)])])
+  (flow->clj (->Or [(->Equal 'input 1) (->Equal 'input 2)]) true)
+  (flow->clj (->Or [(->And [(->Let 'output 'input) (->Equal 'input 1)])
+                    (->And [(->Let 'output 'input) (->Equal 'input 2)])])
              ['output])
 )

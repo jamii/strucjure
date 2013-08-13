@@ -1,4 +1,5 @@
-(ns strucjure.pattern)
+(ns strucjure.pattern
+  (:require [strucjure.util :as util]))
 
 (defrecord Bind [symbol])
 
@@ -6,3 +7,5 @@
 (defrecord And [patterns])
 
 (defrecord & [pattern])
+
+(defrecord View [form])

@@ -34,13 +34,15 @@
 ;; reimplement core
 
 ;; --- LESSONS ---
+;; huge premature optimisation of ->Or - measure twice, cut once
+;; should look like constructors as much as possible
 ;; representation as plain data-structure, minimal syntax
-;; compile as late as possible
+;; compile as late as possible, use stubs for things that might not be needed
+;; unquote as data macro cf template haskell and copilot
 ;; view/pattern interplay allows injecting other kinds of parsers
-;; unquote as data macro
-;; placeholders instead of passing closures
-;; bush->tree trick made it easier to unify whole compiler
+;; compiler simplified by mutable variables
 ;; writing use cases helps make decisions
+;; writing out expected code help write compiler
 ;; write the api without macros first
 
 ;; --- SCRATCH ---
@@ -54,7 +56,6 @@
 ;; later - run over generated code and remove (if _ true false) etc
 ;; tree is easy, use chunk for dag, use fns for cycles
 ;;   in graph, anything with a backwards edge to it becomes a fn, everything else is a raw pattern
-;; match -> run-view
 ;; use meta for bindings?
 
 (comment
@@ -69,6 +70,7 @@
 ;; (do nil & rest)
 
 ;; --- MOTIVATION ---
+;; types vs data
 (comment
   (:require [strucjure.raw :as r]
             [strucjure.sugar :as s])
@@ -131,7 +133,7 @@
   ;; still need to think about bindings
 )
 
-;; (->Get name) (->Set name value) (->Bind name value)
-;; (pattern->decision [this input output remaining bound])
-;; return true/false
-;; (let [[output remaining bound] (gen-pattern->decision pattern input)] ...)
+;; construct , destruct , restruct? better than replode...
+;; transform is destruct=>construct
+;; lens -> struct
+;; flow is not a lens, its explode/implode

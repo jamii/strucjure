@@ -1,206 +1,100 @@
 (ns strucjure.view
-  (:require [clojure.set :refer [union]]
-            [strucjure.util :refer [walk-replace walk-collect]]))
+  (:require [strucjure.util :as util]
+            [strucjure.pattern :refer [->Bind ->And ->Or ->& ->View]]))
 
-;; --- STUBS ---
+;; TODO consider passing output in so it can be nilled out by ->Output
 
-(defrecord Succeed [output remaining bound])
-(defrecord Fail [])
-
-(defn set-stubs [tree succeed-fn fail-fn]
-  (walk-replace tree
-                {Succeed (fn [form] (apply succeed-fn (vals form)))
-                 Fail (fn [form] (apply fail-fn (vals form)))}))
-
-(defn get-stubs [tree]
-  (let [results (walk-collect tree #{Succeed Fail})]
-    [(results Succeed) (results Fail)]))
-
-;; --- BINDINGS ---
-;; TODO use efficient local vars instead of atoms
-
-(defrecord Get [symbol])
-(defrecord Set [symbol value])
-
-(defn with-bindings [tree]
-  (let [bound (set (map :symbol (get (walk-collect tree #{Get}) Get)))
-        indexes (zipmap bound (range))
-        bindings-sym (gensym "bindings")]
-    `(let [~bindings-sym (object-array ~(count bound))]
-       ~(walk-replace tree
-                      {Get (fn [{:keys [symbol]}]
-                                    `(aget ~bindings-sym ~(indexes symbol)))
-                       Set (fn [{:keys [symbol value]}]
-                                    (when (bound symbol)
-                                      `(aset ~bindings-sym ~(indexes symbol) ~value)))}))))
-
-;; --- TREES ---
-;; trees are decisions with more than one success/fail path
-
-(defn tree->bound
-  "The set of symbols that are bound if the tree succeeds"
-  [tree]
-  (let [[succeeds _] (get-stubs tree)]
-    (assert (= 1 (count (set (map :bound succeeds)))) "All success paths must bind the same set of symbols")
-    (:bound (first succeeds))))
-
-(defn tree->decision
-  "Reduce the number of success and failure paths to at most one each to avoid exponential branching"
-  [tree]
-  (let [[succeeds fails] (get-stubs tree)]
-    (cond
-     (and (<= (count succeeds) 1) (<= (count fails) 1)) ;; already a decision
-      tree
-
-     :else ;; store results in a binding
-     (let [output-sym (gensym "output")
-           remaining-sym (gensym "remaining")]
-       `(if ~(set-stubs tree
-                        (fn [output remaining _]
-                          `(do ~(->Set output-sym output)
-                               ~(->Set remaining-sym remaining)
-                               true))
-                        (fn [] false))
-          ~(->Succeed (->Get output-sym) (->Get remaining-sym) (tree->bound tree))
-          ~(->Fail))))))
-
-;; --- COMPILER ---
-
-(defn when-nil-remaining [remaining body]
-  (if (nil? remaining)
+(defn when-nil [form body]
+  (if (nil? form)
     body
-    `(if (nil? ~remaining)
-       ~body
-       ~(->Fail))))
+    `(when (nil? ~form) ~body)))
 
 (defprotocol IView
-  (pattern->decision [this input bound]))
+  (pattern->clj [this input result->body]))
 
-(defn and->tree [sub-patterns input bound]
-  (let [[sub-pattern & sub-patterns] sub-patterns]
-    (if sub-patterns
-      (set-stubs (pattern->decision sub-pattern input bound)
-                 (fn [_ remaining bound]
-                   (when-nil-remaining remaining
-                                       (and->tree sub-patterns input bound)))
-                 ->Fail)
-      (pattern->decision sub-pattern input bound))))
+(defn pattern->result [pattern]
+  (let [result (atom nil)]
+    (pattern->clj pattern 'input (fn [output remaining] (reset! result [output remaining])))
+    @result))
 
-(defn or->tree [sub-patterns input bound]
-  (let [[sub-pattern & sub-patterns] sub-patterns]
-    (if sub-patterns
-      (set-stubs (pattern->decision sub-pattern input bound)
-                 ->Succeed
-                 (fn []
-                   (or->tree sub-patterns input bound)))
-      (pattern->decision sub-pattern input bound))))
-
-(declare seq->tree)
-
-(defn seq-rest->tree [sub-patterns output remaining bound]
-  (set-stubs (seq->tree sub-patterns remaining bound)
-             (fn [rest-output rest-remaining rest-bound]
-               (->Succeed (cons 'list (concat output (rest rest-output))) rest-remaining rest-bound))
-             ->Fail))
-
-(defn seq->tree [sub-patterns input bound]
-  (if-let [[sub-pattern & sub-patterns] sub-patterns]
-    (if (instance? strucjure.pattern.& sub-pattern)
-      (set-stubs (pattern->decision sub-pattern input bound)
-                 (fn [output remaining bound]
-                   (seq-rest->tree sub-patterns output remaining bound))
-                 ->Fail)
-      (let [first-sym (gensym "first")
-            rest-sym (gensym "rest")]
-        `(if-let [[~first-sym & ~rest-sym] ~input]
-           ~(set-stubs (pattern->decision sub-pattern first-sym bound)
-                       (fn [output remaining bound]
-                         (when-nil-remaining remaining
-                                             (seq-rest->tree sub-patterns (list output) rest-sym bound)))
-                       ->Fail)
-           ~(->Fail))))
-    (->Succeed nil input bound)))
-
-(defn view->decision [view input bound]
-  (let [output-sym (gensym "output")
-        remaining-sym (gensym "remaining")]
-    `(if-let [[~output-sym ~remaining-sym] (~view ~input)]
-       ~(->Succeed output-sym remaining-sym bound)
-       ~(->Fail))))
+(defn seq->clj [pattern input result->body]
+  (if-let [[first-pattern & rest-pattern] pattern]
+    (if (instance? strucjure.pattern.& first-pattern)
+      (pattern->clj first-pattern input
+                    (fn [first-output first-remaining]
+                      (seq->clj rest-pattern first-remaining
+                                (fn [rest-output rest-remaining]
+                                  (result->body `(concat ~first-output ~rest-output) rest-remaining)))))
+      (util/let-syms [first-input rest-input]
+                     `(when-let [[~first-input & ~rest-input] ~input]
+                        ~(pattern->clj first-pattern first-input
+                                       (fn [first-output first-remaining]
+                                         (when-nil first-remaining
+                                                   (seq->clj rest-pattern rest-input
+                                                             (fn [rest-output rest-remaining]
+                                                               (result->body `(cons ~first-output ~rest-output) rest-remaining)))))))))
+    (result->body nil input)))
 
 (extend-protocol IView
   Object
-  (pattern->decision [this input bound]
-    `(if (= ~input ~this)
-       ~(->Succeed input nil bound)
-       ~(->Fail)))
-  clojure.lang.Symbol
-  (pattern->decision [this input bound]
-    `(if (= ~input '~this)
-       ~(->Succeed input nil bound)
-       ~(->Fail)))
-  strucjure.pattern.Bind
-  (pattern->decision [this input bound]
-    (let [symbol (:symbol this)]
-      (if (bound symbol)
-        `(if (= ~(->Get symbol) ~input)
-           ~(->Succeed input nil bound)
-           ~(->Fail))
-        `(do ~(->Set symbol input)
-             ~(->Succeed input nil (conj bound symbol))))))
-  strucjure.pattern.And
-  (pattern->decision [this input bound]
-    (tree->decision (and->tree (:patterns this) input bound)))
-  strucjure.pattern.Or
-  (pattern->decision [this input bound]
-    (tree->decision (or->tree (:patterns this) input bound)))
+  (pattern->clj [this input result->body]
+    `(when (= ~input '~this)
+       ~(result->body input nil)))
   clojure.lang.ISeq
-  (pattern->decision [this input bound]
-    (tree->decision
-     `(if (instance? clojure.lang.Seqable ~input)
-        ~(seq->tree this input bound)
-        ~(->Fail))))
-  clojure.lang.Fn ;; a view
-  (pattern->decision [this input bound]
-    (view->decision this input bound))
-  clojure.lang.Var ;; a var pointing to a view
-  (pattern->decision [this input bound]
-    (view->decision this input bound)))
+  (pattern->clj [this input result->body]
+    `(when (seq? ~input)
+       ~(seq->clj this input result->body)))
+  strucjure.pattern.Bind
+  (pattern->clj [this input result->body]
+    `(let [~(:symbol this) ~input]
+       ~(result->body input nil)))
+  strucjure.pattern.Or
+  (pattern->clj [this input result->body]
+    (let [results (map pattern->result (:patterns this))]
+      (if (every? #(= [input nil] %) results)
+        `(when (or ~@(for [pattern (:patterns this)]
+                       (pattern->clj pattern input (fn [_ _] true))))
+           ~(result->body input nil))
+        `(or ~@(for [pattern (:patterns this)]
+                 (pattern->clj pattern input result->body))))))
+  strucjure.pattern.And
+  (pattern->clj [this input result->body]
+    (let [[first-pattern & rest-pattern] (:patterns this)]
+      (if rest-pattern
+        (pattern->clj first-pattern input (fn [_ _] (pattern->clj (->And rest-pattern) input result->body)))
+        (pattern->clj first-pattern input result->body))))
+  strucjure.pattern.&
+  (pattern->clj [this input result->body]
+    (throw (Exception. (str "Compiling strucjure.pattern.& outside of seq: " this))))
+  strucjure.pattern.View
+  (pattern->clj [this input result->body]
+    (util/let-syms [view-output view-remaining]
+                   `(when-let [[~view-output ~view-remaining] (~(:form this) ~input)]
+                      ~(result->body view-output view-remaining)))))
 
-(defn pattern->view
-  ([pattern]
-     (pattern->view 'fn pattern))
-  ([name pattern]
-     (let [input-sym (gensym "input")
-           decision (pattern->decision pattern input-sym #{})]
-       `(~name [~input-sym]
-               ~(with-bindings (set-stubs decision
-                                          (fn [output remaining _] [output remaining])
-                                          (fn [] nil)))))))
+(defn pattern->view [pattern]
+  (util/let-syms [input]
+                 `(fn [~input]
+                    ~(pattern->clj pattern input
+                                   (fn [output remaining]
+                                     [output remaining])))))
 
 (comment
-  (use 'strucjure.pattern)
-  (pattern->decision-with-locals (->Bind 'a) 'input #{})
-  (pattern->decision-with-locals (->Bind 'a) 'input #{'a})
-  (and->tree [(->Bind 'a) (->Bind 'b)] 'input #{})
-  (pattern->decision (->And [(->Bind 'a) 1]) 'input #{})
-  (pattern->decision (->And [(->Bind 'a) 1 2]) 'input #{})
-  (pattern->decision (->And [(->Bind 'a) (->Bind 'b)]) 'input #{})
-  (pattern->decision-with-locals (->And [(->Bind 'a) (->Bind 'b)]) 'input #{})
-  (pattern->decision (->And [(->Bind 'a) (->Bind 'b)]) 'input #{})
+  (use 'clojure.stacktrace)
+  (pattern->view (list (->Bind 'a)))
+  (pattern->view (->And [(->Bind 'a) 1]))
+  (pattern->view (->And [(->Bind 'a) 1 2]))
   (pattern->view (->And [(->Bind 'a) (->Bind 'b)]))
   ((eval (pattern->view (->And [(->Bind 'a) (->Bind 'b)]))) 1)
   ((eval (pattern->view (->And [1 (->Bind 'b)]))) 1)
   ((eval (pattern->view (->And [1 (->Bind 'b)]))) 2)
-  (pattern->decision (list 1) 'input #{})
-  (pattern->decision (list 1 2) 'input #{})
-  (pattern->view (list 1))
+  (pattern->view (list 1 2))
   ((eval (pattern->view (list 1 2))) (list 1 2))
   ((eval (pattern->view (list 1 2))) (list 1))
   ((eval (pattern->view (list 1 2))) (list 1 2 3))
   ((eval (pattern->view (list 1 2))) (list 1 3))
   ((eval (pattern->view (list 1 2))) [1 2])
   ((eval (pattern->view (list 1 2))) 1)
-  (let [a (eval (pattern->view 1))] (pattern->view (list a 2)))
-  (let [a (eval (pattern->view 1))] ((eval (pattern->view (list a 2))) [1 2 3]))
+  (let [a (eval (pattern->view 1))] (pattern->view (list (->View a) 2)))
+  (let [a (eval (pattern->view 1))] ((eval (pattern->view (list (->View a) 2))) (list 1 2 3)))
 )

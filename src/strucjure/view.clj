@@ -38,15 +38,6 @@
     `(concat ~output ~rest)
     `(cons ~output ~rest)))
 
-(defn seq->clj [pattern input used? result->body]
-  (if-let [[first-pattern & rest-pattern] pattern]
-    (head->clj first-pattern input used?
-               (fn [first-output first-remaining]
-                 (seq->clj rest-pattern first-remaining used?
-                           (fn [rest-output rest-remaining]
-                             (result->body (cons->clj pattern first-output rest-output) rest-remaining)))))
-    (result->body nil input)))
-
 (extend-protocol IView
   Object
   (pattern->clj [this input used? result->body]
@@ -71,7 +62,16 @@
     (util/let-syms [seq-input]
                    `(when (seq? ~input)
                       (let [~seq-input (seq ~input)]
-                        ~(seq->clj (seq this) seq-input used? result->body)))))
+                        ~(pattern->clj (pattern/->Seq this) seq-input used? result->body)))))
+  strucjure.pattern.Seq
+  (pattern->clj [this input used? result->body]
+    (if-let [[first-pattern & rest-pattern] (seq (:patterns this))]
+      (head->clj first-pattern input used?
+                 (fn [first-output first-remaining]
+                   (pattern->clj (pattern/->Seq rest-pattern) first-remaining used?
+                                 (fn [rest-output rest-remaining]
+                                   (result->body (cons->clj first-pattern first-output rest-output) rest-remaining)))))
+      (result->body nil input)))
   strucjure.pattern.Bind
   (pattern->clj [this input used? result->body]
     (if (used? (:symbol this))
@@ -96,10 +96,11 @@
                  (pattern->clj pattern input used? result->body))))))
   strucjure.pattern.And
   (pattern->clj [this input used? result->body]
-    (let [[first-pattern & rest-pattern] (:patterns this)]
+    (if-let [[first-pattern & rest-pattern] (:patterns this)]
       (if rest-pattern
         (pattern->clj first-pattern input used? (fn [_ _] (pattern->clj (pattern/->And rest-pattern) input used? result->body)))
-        (pattern->clj first-pattern input used? result->body))))
+        (pattern->clj first-pattern input used? result->body))
+      (throw (Exception. "Empty strucjure.pattern.And"))))
   strucjure.pattern.Rest
   (pattern->clj [this input used? result->body]
     (throw (Exception. (str "Compiling strucjure.pattern.Rest outside of seq: " this))))

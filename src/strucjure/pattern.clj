@@ -8,6 +8,8 @@
 (defrecord Is [form])
 (defrecord Guard [pattern form])
 
+(defrecord Seq [patterns])
+
 (defrecord Bind [pattern symbol])
 (defrecord Output [pattern form])
 

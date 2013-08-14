@@ -1,6 +1,6 @@
 (ns strucjure.view
   (:require [strucjure.util :as util]
-            [strucjure.pattern :refer [->Bind ->And ->Or ->& ->View]]))
+            [strucjure.pattern :as pattern]))
 
 ;; TODO when we come to doing loops consider passing output? so the loop can decide whether or not to
 
@@ -61,11 +61,11 @@
   (pattern->clj [this input result->body]
     (let [[first-pattern & rest-pattern] (:patterns this)]
       (if rest-pattern
-        (pattern->clj first-pattern input (fn [_ _] (pattern->clj (->And rest-pattern) input result->body)))
+        (pattern->clj first-pattern input (fn [_ _] (pattern->clj (pattern/->And rest-pattern) input result->body)))
         (pattern->clj first-pattern input result->body))))
-  strucjure.pattern.&
+  strucjure.pattern.Rest
   (pattern->clj [this input result->body]
-    (throw (Exception. (str "Compiling strucjure.pattern.& outside of seq: " this))))
+    (throw (Exception. (str "Compiling strucjure.pattern.Rest outside of seq: " this))))
   strucjure.pattern.View
   (pattern->clj [this input result->body]
     (util/let-syms [view-output view-remaining]
@@ -80,6 +80,7 @@
                                      [output remaining])))))
 
 (comment
+  (use 'strucjure.pattern)
   (use 'clojure.stacktrace)
   (pattern->view (list (->Bind 'a)))
   (pattern->view (->And [(->Bind 'a) 1]))

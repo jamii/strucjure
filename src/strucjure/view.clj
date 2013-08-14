@@ -53,6 +53,9 @@
   (pattern->clj [this input used? result->body]
     `(when (= ~input '~this)
        ~(result->body input nil)))
+  strucjure.pattern.Any
+  (pattern->clj [this input used? result->body]
+    (result->body input nil))
   clojure.lang.ISeq
   (pattern->clj [this input used? result->body]
     (util/let-syms [seq-input]
@@ -136,5 +139,5 @@
   ((eval (pattern->view (->ZeroOrMore 1))) (list 1 1 2))
   (pattern->view (->ZeroOrMore 1))
   (pattern->view (->Output (->ZeroOrMore 1) ''ones))
-  (pattern->view (->Output (->Bind (->ZeroOrMore 1) 'a) ''ones))
+  (pattern->view (->Output (->Bind (->ZeroOrMore 1) 'a) 'a))
   )

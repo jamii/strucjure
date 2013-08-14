@@ -5,6 +5,8 @@
 ;; TODO _, When, Is, Vector, Map, Set, Record
 ;; TODO in sugar need to macroexpand any user form in place
 
+(defrecord Any [])
+
 (defrecord Bind [pattern symbol])
 (defrecord Output [pattern form])
 

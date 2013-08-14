@@ -1,7 +1,6 @@
 (ns strucjure.pattern
   (:require [strucjure.util :as util]))
 
-;; TODO think more about extension points eg relation between IPrimitivePattern, IPattern, IView, IGen
 ;; TODO Vector, Map, Set, Record
 ;; TODO in sugar need to syntax-quote user forms
 

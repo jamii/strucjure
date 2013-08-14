@@ -3,7 +3,6 @@
             [strucjure.util :as util]
             [strucjure.pattern :as pattern]))
 
-;; TODO when we come to doing loops consider passing output? so the loop can decide whether or not to
 ;; TODO add a value? method for more efficent handling of patterns like [1 2 3]
 
 (defn when-nil [form body]

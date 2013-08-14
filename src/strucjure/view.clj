@@ -120,10 +120,13 @@
                    `(when-let [[~view-output ~view-remaining] (~(:form this) ~input)]
                       ~(result->body view-output view-remaining)))))
 
-(defn pattern->view [pattern]
-  (util/let-syms [input]
-                 `(fn [~input]
-                    ~(pattern->clj pattern input #{:output} (fn [output remaining] [output remaining])))))
+(defn pattern->view
+  ([pattern]
+     (pattern->view 'fn pattern))
+  ([name pattern]
+     (util/let-syms [input]
+                    `(~name [~input]
+                       ~(pattern->clj pattern input #{:output} (fn [output remaining] [output remaining]))))))
 
 (comment
   (use 'strucjure.pattern)

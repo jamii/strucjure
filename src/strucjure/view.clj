@@ -1,5 +1,6 @@
 (ns strucjure.view
-  (:require [strucjure.util :as util]
+  (:require clojure.set
+            [strucjure.util :as util]
             [strucjure.pattern :as pattern]))
 
 ;; TODO when we come to doing loops consider passing output? so the loop can decide whether or not to
@@ -61,9 +62,16 @@
   strucjure.pattern.Bind
   (pattern->clj [this input used? result->body]
     (if (used? (:symbol this))
-      `(let [~(:symbol this) ~input]
-         ~(result->body input nil))
-      (result->body input nil)))
+      (pattern->clj (:pattern this) input (conj used? :output)
+                    (fn [output remaining]
+                      `(let [~(:symbol this) ~output]
+                         ~(result->body (:symbol this) remaining))))
+      (pattern->clj (:pattern this) input used? result->body)))
+  strucjure.pattern.Output
+  (pattern->clj [this input used? result->body]
+    (pattern->clj (:pattern this) input
+                  (clojure.set/union (disj used? :output) (util/free-syms (:form this)))
+                  (fn [_ remaining] (result->body (:form this) remaining))))
   strucjure.pattern.Or
   (pattern->clj [this input used? result->body]
     (let [results (map #(pattern->results % used?) (:patterns this))]
@@ -108,15 +116,8 @@
   (use 'strucjure.pattern)
   (use 'clojure.stacktrace)
   (e)
-  (pattern->clj (list (->Bind 'a)) 'input #{} (fn [output remaining] [remaining]))
-  (pattern->clj (list (->Bind 'a)) 'input #{'a} (fn [output remaining] [output remaining]))
-  (pattern->view (list (->Bind 'a)))
-  (pattern->view (->And [(->Bind 'a) 1]))
-  (pattern->view (->And [(->Bind 'a) 1 2]))
-  (pattern->view (->And [(->Bind 'a) (->Bind 'b)]))
-  ((eval (pattern->view (->And [(->Bind 'a) (->Bind 'b)]))) 1)
-  ((eval (pattern->view (->And [1 (->Bind 'b)]))) 1)
-  ((eval (pattern->view (->And [1 (->Bind 'b)]))) 2)
+  (pattern->view (->Bind 1 'a))
+  (pattern->view (->Output (->Bind 1 'a) '(+ a 1)))
   (pattern->view (list 1 2))
   ((eval (pattern->view (list 1 2))) (list 1 2))
   ((eval (pattern->view (list 1 2))) (list 1))
@@ -133,4 +134,7 @@
   ((eval (pattern->view (->ZeroOrMore 1))) (list 2))
   ((eval (pattern->view (->ZeroOrMore 1))) (list 1 1))
   ((eval (pattern->view (->ZeroOrMore 1))) (list 1 1 2))
+  (pattern->view (->ZeroOrMore 1))
+  (pattern->view (->Output (->ZeroOrMore 1) ''ones))
+  (pattern->view (->Output (->Bind (->ZeroOrMore 1) 'a) ''ones))
   )

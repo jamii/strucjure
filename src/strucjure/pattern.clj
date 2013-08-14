@@ -2,10 +2,12 @@
   (:require [strucjure.util :as util]))
 
 ;; TODO think more about extension points eg relation between IPrimitivePattern, IPattern, IView, IGen
-;; TODO _, When, Is, Vector, Map, Set, Record
-;; TODO in sugar need to macroexpand any user form in place
+;; TODO Vector, Map, Set, Record
+;; TODO in sugar need to syntax-quote user forms
 
 (defrecord Any [])
+(defrecord Is [form])
+(defrecord Guard [pattern form])
 
 (defrecord Bind [pattern symbol])
 (defrecord Output [pattern form])

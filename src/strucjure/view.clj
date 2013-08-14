@@ -56,6 +56,17 @@
   strucjure.pattern.Any
   (pattern->clj [this input used? result->body]
     (result->body input nil))
+  strucjure.pattern.Is
+  (pattern->clj [this input used? result->body]
+    `(when (let [~'% ~input] ~(:form this))
+       ~(result->body input nil)))
+  strucjure.pattern.Guard
+  (pattern->clj [this input used? result->body]
+    (pattern->clj (:pattern this) input
+                  (clojure.set/union used? (util/free-syms (:form this)))
+                  (fn [output remaining]
+                    `(when ~(:form this)
+                       ~(result->body output remaining)))))
   clojure.lang.ISeq
   (pattern->clj [this input used? result->body]
     (util/let-syms [seq-input]

@@ -23,22 +23,28 @@
     (pattern->clj pattern 'input used? (fn [output remaining] (swap! results conj [output remaining])))
     @results))
 
+(defn head->clj [pattern input used? result->body]
+  (if (instance? strucjure.pattern.Rest pattern)
+    (pattern->clj (:pattern pattern) input used? result->body)
+    (util/let-syms [first-input rest-input]
+                   `(when-let [[~first-input & ~rest-input] ~input]
+                      ~(pattern->clj pattern first-input used?
+                                     (fn [output remaining]
+                                       (when-nil remaining
+                                                 (result->body output rest-input))))))))
+
+(defn cons->clj [pattern output rest]
+  (if (instance? strucjure.pattern.Rest pattern)
+    `(concat ~output ~rest)
+    `(cons ~output ~rest)))
+
 (defn seq->clj [pattern input used? result->body]
   (if-let [[first-pattern & rest-pattern] pattern]
-    (if (instance? strucjure.pattern.Rest first-pattern)
-      (pattern->clj first-pattern input used?
-                    (fn [first-output first-remaining]
-                      (seq->clj rest-pattern first-remaining used?
-                                (fn [rest-output rest-remaining]
-                                  (result->body `(concat ~first-output ~rest-output) rest-remaining)))))
-      (util/let-syms [first-input rest-input]
-                     `(when-let [[~first-input & ~rest-input] ~input]
-                        ~(pattern->clj first-pattern first-input used?
-                                       (fn [first-output first-remaining]
-                                         (when-nil first-remaining
-                                                   (seq->clj rest-pattern rest-input used?
-                                                             (fn [rest-output rest-remaining]
-                                                               (result->body `(cons ~first-output ~rest-output) rest-remaining)))))))))
+    (head->clj first-pattern input used?
+               (fn [first-output first-remaining]
+                 (seq->clj rest-pattern first-remaining used?
+                           (fn [rest-output rest-remaining]
+                             (result->body (cons->clj pattern first-output rest-output) rest-remaining)))))
     (result->body nil input)))
 
 (extend-protocol IView
@@ -48,8 +54,10 @@
        ~(result->body input nil)))
   clojure.lang.ISeq
   (pattern->clj [this input used? result->body]
-    `(when (seq? ~input)
-       ~(seq->clj this input used? result->body)))
+    (util/let-syms [seq-input]
+                   `(when (seq? ~input)
+                      (let [~seq-input (seq ~input)]
+                        ~(seq->clj (seq this) seq-input used? result->body)))))
   strucjure.pattern.Bind
   (pattern->clj [this input used? result->body]
     (if (used? (:symbol this))
@@ -74,6 +82,17 @@
   strucjure.pattern.Rest
   (pattern->clj [this input used? result->body]
     (throw (Exception. (str "Compiling strucjure.pattern.Rest outside of seq: " this))))
+  strucjure.pattern.ZeroOrMore
+  (pattern->clj [this input used? result->body]
+    (util/let-syms [loop-output loop-remaining output remaining]
+                   (let [binding (if (used? :output) [output remaining] [remaining])
+                         return (fn [output remaining] (if (used? :output) [output remaining] [remaining]))
+                         output-acc (when (used? :output) (cons->clj (:pattern this) output loop-output))]
+                     `(when (seq? ~input)
+                        (loop [~loop-output nil ~loop-remaining (seq ~input)]
+                          (if-let [~binding ~(head->clj (:pattern this) loop-remaining used? return)]
+                            (recur ~output-acc ~remaining)
+                            ~(result->body `(reverse ~loop-output) loop-remaining)))))))
   strucjure.pattern.View
   (pattern->clj [this input used? result->body]
     (util/let-syms [view-output view-remaining]
@@ -83,15 +102,13 @@
 (defn pattern->view [pattern]
   (util/let-syms [input]
                  `(fn [~input]
-                    ~(pattern->clj pattern input #{:output}
-                                   (fn [output remaining]
-                                     [output remaining])))))
+                    ~(pattern->clj pattern input #{:output} (fn [output remaining] [output remaining])))))
 
 (comment
   (use 'strucjure.pattern)
   (use 'clojure.stacktrace)
   (e)
-  (pattern->clj (list (->Bind 'a)) 'input #{} (fn [output remaining] [output remaining]))
+  (pattern->clj (list (->Bind 'a)) 'input #{} (fn [output remaining] [remaining]))
   (pattern->clj (list (->Bind 'a)) 'input #{'a} (fn [output remaining] [output remaining]))
   (pattern->view (list (->Bind 'a)))
   (pattern->view (->And [(->Bind 'a) 1]))
@@ -109,4 +126,11 @@
   ((eval (pattern->view (list 1 2))) 1)
   (let [a (eval (pattern->view 1))] (pattern->view (list (->View a) 2)))
   (let [a (eval (pattern->view 1))] ((eval (pattern->view (list (->View a) 2))) (list 1 2 3)))
-)
+  ((eval (pattern->view (list))) (list 1 2))
+  (pattern->clj (->ZeroOrMore 1) 'input #{} (fn [output remaining] [remaining]))
+  (pattern->clj (->ZeroOrMore 1) 'input #{:output} (fn [output remaining] [output remaining]))
+  ((eval (pattern->view (->ZeroOrMore 1))) (list))
+  ((eval (pattern->view (->ZeroOrMore 1))) (list 2))
+  ((eval (pattern->view (->ZeroOrMore 1))) (list 1 1))
+  ((eval (pattern->view (->ZeroOrMore 1))) (list 1 1 2))
+  )

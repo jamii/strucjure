@@ -2,7 +2,7 @@
   (:require [strucjure.util :as util]
             [strucjure.pattern :refer [->Bind ->And ->Or ->& ->View]]))
 
-;; TODO consider passing output in so it can be nilled out by ->Output
+;; TODO when we come to doing loops consider passing output? so the loop can decide whether or not to
 
 (defn when-nil [form body]
   (if (nil? form)
@@ -12,10 +12,10 @@
 (defprotocol IView
   (pattern->clj [this input result->body]))
 
-(defn pattern->result [pattern]
-  (let [result (atom nil)]
-    (pattern->clj pattern 'input (fn [output remaining] (reset! result [output remaining])))
-    @result))
+(defn pattern->resultss [pattern]
+  (let [results (atom #{})]
+    (pattern->clj pattern 'input (fn [output remaining] (swap! results conj [output remaining])))
+    @results))
 
 (defn seq->clj [pattern input result->body]
   (if-let [[first-pattern & rest-pattern] pattern]
@@ -50,8 +50,8 @@
        ~(result->body input nil)))
   strucjure.pattern.Or
   (pattern->clj [this input result->body]
-    (let [results (map pattern->result (:patterns this))]
-      (if (every? #(= [input nil] %) results)
+    (let [results (map pattern->results (:patterns this))]
+      (if (every? #(= #{[input nil]} %) results)
         `(when (or ~@(for [pattern (:patterns this)]
                        (pattern->clj pattern input (fn [_ _] true))))
            ~(result->body input nil))

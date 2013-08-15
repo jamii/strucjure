@@ -2,7 +2,6 @@
 
 ;; --- TODO ---
 ;; more datatypes
-;; raw
 ;; sugar
 ;; graph (trace, deepest-error, get-in, update-in, output-in)
 ;; tests

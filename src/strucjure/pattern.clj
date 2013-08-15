@@ -2,7 +2,6 @@
   (:require [strucjure.util :as util]))
 
 ;; TODO Vector, Map, Set, Record
-;; TODO in sugar need to syntax-quote user forms
 
 (defrecord Any [])
 (defrecord Is [form])

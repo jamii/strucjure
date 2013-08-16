@@ -1,15 +1,16 @@
 (ns strucjure)
 
 ;; --- TODO ---
-;; http://ialab.cs.tsukuba.ac.jp/~mizusima/publications/paste513-mizushima.pdf
-;; more datatypes
+;; move view into pattern
+;; need to be able to walk patterns for analysis and for sugar
+;; need to be able to alter views (store original pattern in meta and have pattern/alter and graph/alter)
 ;; sugar
-;; graph (trace, deepest-error, get-in, update-in, output-in)
+;; graph (deepest-error, get-in)
 ;; tests
 ;; README
 
 ;; --- LATER ---
-;; cut
+;; cut http://ialab.cs.tsukuba.ac.jp/~mizusima/publications/paste513-mizushima.pdf
 ;; gens
 ;; type hinting
 ;; string patterns, ~(chain "foo" "/" "bar"), may have to rethink seq patterns

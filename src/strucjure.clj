@@ -1,6 +1,7 @@
 (ns strucjure)
 
 ;; --- TODO ---
+;; http://ialab.cs.tsukuba.ac.jp/~mizusima/publications/paste513-mizushima.pdf
 ;; more datatypes
 ;; sugar
 ;; graph (trace, deepest-error, get-in, update-in, output-in)
@@ -47,27 +48,6 @@
      option ~(s/or ~as ~refer)
      as (:as ~symbol)
      refer (:refer [& + ~symbol])))
-
-  (def pattern-pattern
-    (s/graph
-     pattern ~(s/with-meta {:type ~binding} ~unbound-pattern)
-     unbound-pattern ~(s/or ~unquote ~seq ~vec ~symbol _)
-     unquote (clojure.core/unquote _)
-     seq (& * & elem)
-     vec [& * & elem]
-     elem ~(s/or (~pattern) (~unquote-splicing) ~parser)
-     parser ~(s/or ~'* ~'+ ~'? ~'&)
-     binding ~(s/or ~nullable-binding ~non-nullable-binding)
-     nullable-binding ~(s/is nullable-binding? &input)
-     non-nullable-binding ~(s/is non-nullable-binding? &input)
-     symbol ~(s/is symbol? &input)))
-
-  (def desugar-pattern
-    (s/update-graph pattern-pattern
-                    unquote (s/=> ~% (_ ?body) ~body)
-                    parser (s/=> ~% (?action ?sub-pattern) `(~(in-raw action) ~sub-pattern))
-                    binding (s/=> ~% (->Bind (nullable? &output) (binding-name &output)))
-                    symbol (s/=> ~% `'~&output)))
 )
 
 (comment

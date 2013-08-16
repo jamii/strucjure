@@ -3,19 +3,19 @@
             [strucjure.pattern :as pattern]
             [strucjure.view :as view]))
 
-;; TODO think about naming eg graph -> vars -> view
 ;; TODO get-in with-deepest-error
+;; TODO call stack may become a problem
 
-(defn output-in [patterns & names&forms]
-  (apply assoc patterns
+(defn output-in [name->pattern & names&forms]
+  (apply assoc name->pattern
          (aconcat (for [[name form] (partition 2 names&forms)]
-                    [name (pattern/->Output (get patterns name) form)]))))
+                    [name (pattern/->Output (name->pattern name) form)]))))
 
-(defn patterns->graph [patterns]
+(defn patterns->graph [name->pattern]
   `(with-meta
-     ~(for-map [[name pattern] patterns]
+     ~(for-map [[name pattern] name->pattern]
                `'~name
-               `(fn [{:syms [~@(keys patterns)]}] ~(view/pattern->view pattern)))
+               `(fn [{:syms [~@(keys name->pattern)]}] ~(view/pattern->view pattern)))
      {::wrapper identity}))
 
 (defn graph->view [graph name]

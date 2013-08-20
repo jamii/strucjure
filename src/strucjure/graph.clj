@@ -1,10 +1,10 @@
 (ns strucjure.graph
   (:require [plumbing.core :refer [for-map aconcat]]
-            [strucjure.pattern :as pattern]
-            [strucjure.view :as view]))
+            [strucjure.pattern :as pattern]))
 
 ;; TODO get-in with-deepest-error
 ;; TODO call stack may become a problem
+;; TODO allow parts of the graph to take args eg bindable in sugar
 
 (defn output-in [name->pattern & names&forms]
   (apply assoc name->pattern
@@ -15,7 +15,7 @@
   `(with-meta
      ~(for-map [[name pattern] name->pattern]
                `'~name
-               `(fn [{:syms [~@(keys name->pattern)]}] ~(view/pattern->view pattern)))
+               `(fn [{:syms [~@(keys name->pattern)]}] ~(pattern/pattern->view pattern)))
      {::wrapper identity}))
 
 (defn graph->view [graph name]

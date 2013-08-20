@@ -7,10 +7,23 @@
 ;; TODO Atom/Ref/Agent? (what would the output be?)
 ;; TODO when gen is added, pattern->clj will be a poor name
 ;; TODO add a value? method for more efficent handling of patterns like [1 2 3]
-;;      something like (if (contains? instance? IView) pattern->clj value->clj)
+;;      something like (if (contains-instance? pattern IView) pattern->clj value->clj)
 ;; TODO need a general way to indicate that output is unchanged for eg WithMeta
 ;;      just check (= input output)?
-;; TODO let &input and &output in Output, Is, When
+;; TODO let &input and &output in Output, Is, When -- actually, that breaks output optimisations
+;; TODO maybe pass bindings like output/remaining and only let them when used in forms
+;;      or maybe just use closures and stop trying to imitate them in code - what is the overhead?
+;;      ^{::used #{'a 'b}} (fn [a b] ...)
+;;      also fixes the Or optimisation - sufficient to check if bindings is same in each case (Or should let-input)
+;;      but can't embed closures in the generated code
+;;      bound vs free. this is what I'm giving you and this is what I want from you
+;;      (with-env usable form)
+;;      still hard to quasiquote correctly - what if the underlying pattern is changed? probably best not to change the quoting because then it won't match user assumptions?
+;;      could just be explicit about which symbols we expect? not terrible for output-in but a mess for guard
+;;      really have two different cases - could have implicit in sugar and explicit in raw
+;; TODO need to be careful about reusing input - a (let-sym [input `(meta input)] ...) would be useful here
+;;      let-syms -> with-syms, then use let-sym
+;; TODO pattern debugger via *pattern->clj*
 
 (defprotocol IPattern
   (pattern->clj [this input used? result->body]))
@@ -32,10 +45,15 @@
                                   (when-nil remaining
                                             (result->body output rest-input))))))))
 
-(defn cons->clj [pattern output rest]
+(defn cons->clj [pattern first rest]
   (if (instance? Rest pattern)
-    `(concat ~output ~rest)
-    `(cons ~output ~rest)))
+    `(concat ~first ~rest)
+    `(cons ~first ~rest)))
+
+(defn conj->clj [pattern last rest]
+  (if (instance? Rest pattern)
+    `(apply conj ~rest ~last)
+    `(conj ~rest ~last)))
 
 ;; --- VALUE PATTERNS ---
 
@@ -53,16 +71,6 @@
             `(let [~seq-input (seq ~input)]
                ~(seq->clj* patterns seq-input used? result->body))))
 
-(defn map->clj [patterns input used? result->body]
-  (if-let [[[key value-pattern] & rest-pattern] (seq patterns)]
-    (pattern->clj value-pattern `(get ~input ~key) used?
-                  (fn [value-output value-remaining]
-                    (when-nil value-remaining
-                              (map->clj rest-pattern input used?
-                                        (fn [rest-output _]
-                                          (result->body (assoc rest-output key value-output) nil))))))
-    (result->body {} input)))
-
 (defn vec->clj [patterns index input used? result->body]
   (if (< index (count patterns))
     (pattern->clj (nth patterns index) `(nth ~input ~index) used?
@@ -71,9 +79,23 @@
                               (vec->clj patterns (inc index) input used?
                                         (fn [vec-output vec-remaining]
                                           (result->body (vec (cons index-output vec-output)) vec-remaining))))))
-    (result->body [] input)))
+    (result->body [] `(seq (subvec ~input ~index)))))
+
+(defn map->clj [patterns input used? result->body]
+  (if-let [[[key value-pattern] & rest-pattern] (seq patterns)]
+    (pattern->clj value-pattern `(get ~input ~key) used?
+                  (fn [value-output value-remaining]
+                    (when-nil value-remaining
+                              (map->clj rest-pattern input used?
+                                        (fn [rest-output _]
+                                          (result->body `(assoc ~rest-output ~key ~value-output) nil))))))
+    (result->body input nil)))
 
 (extend-protocol IPattern
+  nil
+  (pattern->clj [this input used? result->body]
+    `(when (nil? ~input)
+       ~(result->body nil nil)))
   Object
   (pattern->clj [this input used? result->body]
     `(when (= ~input '~this)
@@ -86,8 +108,10 @@
   (pattern->clj [this input used? result->body]
     `(when (vector? ~input)
        ~(if (some #(instance? Rest %) this)
-          (seq->clj this input used? result->body)
-          (vec->clj this 0 input used? result->body))))
+          (seq->clj this input used?
+                    (fn [output remaining] (result->body `(vec ~output) remaining)))
+          `(when (>= (count ~input) ~(count this))
+             ~(vec->clj this 0 input used? result->body)))))
   clojure.lang.IPersistentMap
   (pattern->clj [this input used? result->body]
     `(when (instance? clojure.lang.IPersistentMap ~input)
@@ -109,7 +133,7 @@
 (defrecord Is [form]
   IPattern
   (pattern->clj [this input used? result->body]
-    `(when (let [~'% ~input] ~form)
+    `(when (let [~'&input ~input] ~form)
        ~(result->body input nil))))
 
 (defrecord Guard [pattern form]
@@ -121,7 +145,7 @@
                     `(when ~form
                        ~(result->body output remaining))))))
 
-(defrecord Bind [pattern symbol]
+(defrecord Bind [symbol pattern]
   IPattern
   (pattern->clj [this input used? result->body]
     (if (used? symbol)
@@ -148,6 +172,7 @@
   (pattern->clj [this input used? result->body]
     (let [results (map #(pattern->results % used?) patterns)]
       (if (every? #(= #{[input nil]} %) results)
+        ;; TODO is this safe for binding?
         `(when (or ~@(for [pattern patterns]
                        (pattern->clj pattern input used? (fn [_ _] true))))
            ~(result->body input nil))
@@ -157,7 +182,7 @@
 (defrecord And [patterns]
   IPattern
   (pattern->clj [this input used? result->body]
-    (if-let [[first-pattern & rest-pattern] patterns]
+    (if-let [[first-pattern & rest-pattern] (seq patterns)]
       (if rest-pattern
         (pattern->clj first-pattern input used? (fn [_ _] (pattern->clj (->And rest-pattern) input used? result->body)))
         (pattern->clj first-pattern input used? result->body))
@@ -169,22 +194,23 @@
     (let-syms [loop-output loop-remaining output remaining]
               (let [binding (if (used? :output) [output remaining] [remaining])
                     return (fn [output remaining] (if (used? :output) [output remaining] [remaining]))
-                    output-acc (when (used? :output) (cons->clj pattern output loop-output))]
+                    output-acc (when (used? :output) (conj->clj pattern output loop-output))]
                 `(when (seq? ~input)
-                   (loop [~loop-output nil ~loop-remaining (seq ~input)]
-                     (if-let [~binding ~(head->clj pattern loop-remaining used? return)]
+                   (loop [~loop-output [] ~loop-remaining (seq ~input)]
+                     (if-let [~binding (and ~loop-remaining ~(head->clj pattern loop-remaining used? return))]
                        (recur ~output-acc ~remaining)
-                       ~(result->body `(reverse ~loop-output) loop-remaining))))))))
+                       ~(result->body `(seq ~loop-output) loop-remaining))))))))
 
 (defrecord WithMeta [pattern meta-pattern]
   IPattern
   (pattern->clj [this input used? result->body]
-    (pattern->clj pattern input used?
-                  (fn [output remaining]
-                    (pattern->clj meta-pattern `(meta ~input) used?
-                                  (fn [meta-output meta-remaining]
-                                    (when-nil meta-remaining
-                                              (result->body `(with-meta ~output ~meta-output) remaining))))))))
+    (let-syms [input-meta]
+              (pattern->clj pattern input used?
+                            (fn [output remaining]
+                              (pattern->clj meta-pattern `(meta ~input) used?
+                                            (fn [meta-output meta-remaining]
+                                              (when-nil meta-remaining
+                                                        (result->body `(if (nil? ~meta-output) ~output (with-meta ~output ~meta-output)) remaining)))))))))
 
 (defrecord View [form]
   IPattern
@@ -220,14 +246,23 @@
   ((eval (pattern->view (->ZeroOrMore 1))) (list 2))
   ((eval (pattern->view (->ZeroOrMore 1))) (list 1 1))
   ((eval (pattern->view (->ZeroOrMore 1))) (list 1 1 2))
+  ((eval (pattern->view (->ZeroOrMore (->Or [1 2])))) (list 1 2 1 2))
   (pattern->view (->ZeroOrMore 1))
   (pattern->view (->Output (->ZeroOrMore 1) ''ones))
   (pattern->view (->Output (->Bind (->ZeroOrMore 1) 'a) 'a))
   (let [[out rem] ((eval (pattern->view (->WithMeta (->Any) {:foo true}))) ^:foo [])]
     (meta out))
+  ((eval (pattern->view [1 2])) [1])
+  ((eval (pattern->view [1 2])) [1 2])
+  ((eval (pattern->view [1 2])) [1 2 3])
+  ((eval (pattern->view [1 2])) [1 3])
   (pattern->view [1 2 (->Bind (->Any) 'a)])
   (pattern->view (->Output [1 2 (->Bind (->Any) 'a)] 'a))
   (pattern->view [1 2 (->Rest (->Any))])
   (pattern->view {1 2 3 (->Bind (->Any) 'a)})
   (pattern->view (->Output {1 2 3 (->Bind (->Any) 'a)} 'a))
+  ((eval (pattern->view (list (->Rest (->Bind 'elems (->ZeroOrMore (->Rest (->Any)))))))) (list 1 2 3))
+  ((eval (pattern->view (->Seqable [(->Rest (->ZeroOrMore [(->Any) (->Any)]))]))) '{:foo 1 :bar (& * 3)})
+  ((eval (pattern->view (->And [{} (->Bind 'elems (->Seqable [(->Rest (->ZeroOrMore [(->Any) (->Any)]))]))]))) '{:foo 1 :bar (& * 3)})
+  ((eval (pattern->view [(->Any) (->Any)])) (first (seq '{:foo 1 :bar (& * 3)})))
   )

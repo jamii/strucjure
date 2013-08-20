@@ -1,16 +1,16 @@
 (ns strucjure)
 
 ;; --- TODO ---
-;; move view into pattern
-;; need to be able to walk patterns for analysis and for sugar
-;; need to be able to alter views (store original pattern in meta and have pattern/alter and graph/alter)
+;; go back to using letfn for graph and figure out how to roundtrip pre/post fns through eval (solves the binding problem)
 ;; sugar
 ;; graph (deepest-error, get-in)
 ;; tests
 ;; README
 
 ;; --- LATER ---
-;; cut http://ialab.cs.tsukuba.ac.jp/~mizusima/publications/paste513-mizushima.pdf
+;; need to be able to alter views (store original pattern in meta and have pattern/alter and graph/alter)
+;; need to be able to walk patterns for eg determining dependencies in graph so can ignore in lenses
+;; cut by returning delay to Or
 ;; gens
 ;; type hinting
 ;; string patterns, ~(chain "foo" "/" "bar"), may have to rethink seq patterns
@@ -26,11 +26,14 @@
 ;; view/pattern interplay allows injecting other kinds of parsers
 ;; compiler simplified by mutable variables
 ;; writing use cases helps make decisions
-;; writing out expected code help write compiler
+;; writing out expected code helps write compiler
 ;; write the api without macros first
+;; would be hugely useful to be able to embed arbitrary data structures in code before eval
+;; getting binding right is hard. parsec et al solve this by just not doing it
 
 ;; --- MOTIVATION ---
 ;; types vs data
+;; use :refer-all as example
 (comment
   (:require [strucjure.raw :as r]
             [strucjure.sugar :as s])

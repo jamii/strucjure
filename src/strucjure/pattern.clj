@@ -195,7 +195,7 @@
               (let [binding (if (used? :output) [output remaining] [remaining])
                     return (fn [output remaining] (if (used? :output) [output remaining] [remaining]))
                     output-acc (when (used? :output) (conj->clj pattern output loop-output))]
-                `(when (seq? ~input)
+                `(when (or (nil? ~input) (seq? ~input))
                    (loop [~loop-output [] ~loop-remaining (seq ~input)]
                      (if-let [~binding (and ~loop-remaining ~(head->clj pattern loop-remaining used? return))]
                        (recur ~output-acc ~remaining)
@@ -265,4 +265,5 @@
   ((eval (pattern->view (->Seqable [(->Rest (->ZeroOrMore [(->Any) (->Any)]))]))) '{:foo 1 :bar (& * 3)})
   ((eval (pattern->view (->And [{} (->Bind 'elems (->Seqable [(->Rest (->ZeroOrMore [(->Any) (->Any)]))]))]))) '{:foo 1 :bar (& * 3)})
   ((eval (pattern->view [(->Any) (->Any)])) (first (seq '{:foo 1 :bar (& * 3)})))
+  (eval (pattern->view (->Output (list (->WithMeta (->Bind 'prefix (->Or ['*]))) (->Rest (->View 'inc))) 'prefix)))
   )

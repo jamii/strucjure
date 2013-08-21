@@ -24,6 +24,7 @@
       (and (seq? form)
            (= 'let* (nth form 0)))
       (let [bound (apply conj bound (take-nth 2 (nth form 1)))]
+        (clojure.walk/walk #(free-syms % free bound) identity (take-nth 2 (rest (nth form 1))))
         (clojure.walk/walk #(free-syms % free bound) identity (nthnext form 2)))
 
       :else

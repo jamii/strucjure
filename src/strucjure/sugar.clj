@@ -4,11 +4,11 @@
             [strucjure.pattern :as pattern :refer [->Rest ->Seqable ->Any ->Is ->Guard ->Bind ->Output ->Or ->And ->ZeroOrMore ->WithMeta ->View]]
             [strucjure.graph :as graph]))
 
-;; TODO graph sugar is just (let [foo (->Bind (->View 'foo) 'foo)] (pattern ...))
 ;; TODO wrapping parser/rest in [] and calling first (elem) is ugly
+;; TODO might want to move all the complicated stuff to sugar.graph in case it gets trampled on by the macros
 
 (defn with-named-nodes [name->pattern]
-  (with-meta
+  (clojure.core/with-meta
     (for-map [[name pattern] name->pattern] name (->Bind name pattern))
     (meta name->pattern)))
 
@@ -19,8 +19,7 @@
      'unquote (list `unquote (->Bind 'unquoted (->Any)))
      'seq (list (->Rest (->Bind 'elems (->ZeroOrMore (->Rest (view 'elem))))))
      'vec (vector (->Rest (->Bind 'elems (->ZeroOrMore (->Rest (view 'elem))))))
-     'elem (->Or [(view 'parser) (view 'rest) (view '&pattern)])
-     '&pattern (list (view 'pattern))
+     'elem (->Or [(view 'parser) (view 'rest) (list (view 'pattern))])
      'parser (list (bindable (->Bind 'prefix (->Or ['*]))) (->Rest (view 'elem))) ;; TODO + ?
      'rest (list (bindable '&) (->Rest (view 'elem)))
      'map (->And [{} (->Bind 'elems (->Seqable [(->Rest (->ZeroOrMore [(->Any) (view 'pattern)]))]))])
@@ -29,45 +28,71 @@
      'default (->Any)}))
 
 (def prefixes
-  {'* pattern/->ZeroOrMore
-   '& pattern/->Rest})
+  {'* 'pattern/->ZeroOrMore})
 
 (def desugar-patterns
   (graph/output-in (with-named-nodes sugar-patterns)
                    'pattern '(if binding `(->Bind '~binding ~pattern) pattern)
                    'unquote 'unquoted
                    'seq '`(list ~@seq)
-                   'parser '[(let [parser `(~(prefixes prefix) ~elem)]
+                   'parser '[(let [parser `(~(prefixes prefix) ~(first elem))]
                                (if binding `(->Bind '~binding ~parser) parser))]
-                   'rest '[`(pattern/->Rest ~(if binding `(->Bind '~binding ~elem) elem))]
+                   'rest '[`(pattern/->Rest ~(if binding `(->Bind '~binding ~(first elem)) (first elem)))]
                    'any '`(pattern/->Any)
                    'default '`'~default))
 
 ;; TODO error reporting here
-(defn desugar [name form]
+(defn desugar [name sugar]
   (let [desugar-view (graph/graph->view (graph/trace (eval (graph/patterns->graph desugar-patterns))) name)]
-    (if-let [[output remaining] (desugar-view form)]
+    (if-let [[output remaining] (desugar-view sugar)]
       (if (nil? remaining)
         output
         (throw (Exception. "Not a pattern")))
       (throw (Exception. "Not a pattern")))))
 
-(defmacro pattern [form]
-  (desugar 'pattern form))
+(defmacro pattern [sugar]
+  (desugar 'pattern sugar))
 
 (defmacro view
-  ([form]
-     (pattern/pattern->view (eval (desugar 'pattern form))))
-  ([form input]
+  ([sugar]
+     (pattern/pattern->view (eval (desugar 'pattern sugar))))
+  ([sugar input]
      (let-syms [input-sym]
                `(let [~input-sym ~input]
-                  ~(pattern/pattern->clj (eval (desugar 'pattern form)) input-sym #{:output}
+                  ~(pattern/pattern->clj (eval (desugar 'pattern sugar)) input-sym #{:output}
                                          (fn [output remaining] [output remaining]))))))
 
-(defmacro patterns [& names&patterns]
-  (let [name->pattern (for-map [[name pattern] (partition 2 names&patterns)] name pattern)]
-    `(let [~@(aconcat (for [[name _] name->pattern] [name `(->Bind '~name (->View '~name))]))]
-       ~(for-map [[name pattern] name->pattern] `'~name `(->Bind '~name (pattern ~pattern))))))
+(defmacro sugars [& names&sugars]
+  (let [name->sugar (for-map [[name sugar] (partition 2 names&sugars)] name sugar)]
+    `(let [~@(aconcat (for [[name _] name->sugar] [name `(->Bind '~name (->View '~name))]))]
+       ~(for-map [[name sugar] name->sugar] `'~name `(->Bind '~name (pattern ~sugar))))))
+
+(defmacro seqable [& sugars]
+  `(->Seqable (pattern ~sugars)))
+
+(defmacro is [sugar]
+  `(->Is (pattern ~sugar)))
+
+(defmacro guard [sugar form]
+  `(->Guard (pattern ~sugar) ~form))
+
+(defmacro output [sugar form]
+  `(->Output (pattern ~sugar) ~form))
+
+(defmacro or [& sugars]
+  `(->Or [~@(for [sugar sugars] `(pattern ~sugar))]))
+
+(defmacro and [& sugars]
+  `(->And [~@(for [sugar sugars] `(pattern ~sugar))]))
+
+(defmacro & [sugar]
+  `(->Rest (pattern ~sugar)))
+
+(defmacro * [sugar]
+  `(->ZeroOrMore (pattern ~sugar)))
+
+(defmacro with-meta [sugar meta-sugar]
+  `(->WithMeta (pattern ~sugar) (pattern ~meta-sugar)))
 
 (comment
   (pattern [1 2 & * 3])
@@ -78,13 +103,14 @@
   (pattern [1 2 ^x ~(->View 'foo)])
   (view [1 2 & * 3] [1 2])
   (view [1 2 & * 3] [1 2 3 3 3])
-  (view ~(->Output (pattern [1 2 ^rest & * 3]) 'rest) [1 2 3 3 3])
-  (pattern ~(->Or [(->Bind 'succ (->View 'succ)) (->Bind 'zero (->View 'zero))]))
+  (view [1 2 & * 3] [1 2 3 3 3 4])
+  (view ~(output [1 2 ^rest & * 3] 'rest) [1 2 3 3 3])
+  (pattern ~(or [(->Bind 'succ (->View 'succ)) (->Bind 'zero (->View 'zero))]))
   (macroexpand-1 '(pattern (1 2 3)))
   (macroexpand-1 '(pattern (succ)))
   (def num-patterns
     (patterns
-     num ~(->Or [succ zero])
+     num ~(or ~succ ~zero)
      succ (succ ~num)
      zero zero))
   (def num (graph/graph->view (eval (graph/patterns->graph num-patterns)) 'num))

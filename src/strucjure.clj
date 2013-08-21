@@ -1,13 +1,17 @@
 (ns strucjure)
 
 ;; --- TODO ---
-;; go back to using letfn for graph and figure out how to roundtrip pre/post fns through eval (solves the binding problem)
-;; sugar
-;; graph (deepest-error, get-in)
+;; check if output unchanged in patterns - maybe rethink how output/bindings are passed
+;; figure out binding - either syntax-quote or use fns
+;; go back to using letfn for graph
+;; debugging - deepest-error, trace-pattern, trace-graph
+;; let input in patterns
+;; fix / remove the Or 'optimisation'
 ;; tests
 ;; README
 
 ;; --- LATER ---
+;; figure out how to roundtrip pre/post closures through eval
 ;; need to be able to alter views (store original pattern in meta and have pattern/alter and graph/alter)
 ;; need to be able to walk patterns for eg determining dependencies in graph so can ignore in lenses
 ;; cut by returning delay to Or

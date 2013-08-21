@@ -6,8 +6,6 @@
 ;; TODO Set? (how would you match subpatterns? maybe only allow bind/with-meta? or only value patterns)
 ;; TODO Atom/Ref/Agent? (what would the output be?)
 ;; TODO when gen is added, pattern->clj will be a poor name
-;; TODO add a value? method for more efficent handling of patterns like [1 2 3]
-;;      something like (if (contains-instance? pattern IView) pattern->clj value->clj)
 ;; TODO need a general way to indicate that output is unchanged for eg WithMeta
 ;;      just check (= input output)?
 ;; TODO let &input and &output in Output, Is, When -- actually, that breaks output optimisations

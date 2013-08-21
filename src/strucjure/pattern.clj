@@ -24,6 +24,8 @@
 ;; TODO need to be careful about reusing input - a (let-sym [input `(meta input)] ...) would be useful here
 ;;      let-syms -> with-syms, then use let-sym
 ;; TODO pattern debugger via *pattern->clj*
+;; TODO think carefully about seq vs list
+;; TODO might have to rething Rest - is frequently ugly eg in sugar
 
 (defprotocol IPattern
   (pattern->clj [this input used? result->body]))

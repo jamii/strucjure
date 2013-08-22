@@ -6,6 +6,7 @@
 
 ;; TODO wrapping parser/rest in [] and calling first (elem) is ugly
 ;; TODO might want to move all the complicated stuff to sugar.graph in case it gets trampled on by the macros
+;; TODO output-in macro, syntax-quote in guard/output
 
 (defn with-named-nodes [name->pattern]
   (clojure.core/with-meta
@@ -32,14 +33,15 @@
 
 (def desugar-patterns
   (graph/output-in (with-named-nodes sugar-patterns)
-                   'pattern '(if binding `(->Bind '~binding ~pattern) pattern)
-                   'unquote 'unquoted
-                   'seq '`(list ~@seq)
-                   'parser '[(let [parser `(~(prefixes prefix) ~(first elem))]
-                               (if binding `(->Bind '~binding ~parser) parser))]
-                   'rest '[`(pattern/->Rest ~(if binding `(->Bind '~binding ~(first elem)) (first elem)))]
-                   'any '`(pattern/->Any)
-                   'default '`'~default))
+                   'pattern ['binding 'pattern] '(if binding `(->Bind '~binding ~pattern) pattern)
+                   'unquote ['unquoted] 'unquoted
+                   'seq ['seq] '`(list ~@seq)
+                   'parser ['binding 'prefix 'elem] '[(let [parser `(~(prefixes prefix) ~(first elem))]
+                                                        (if binding `(->Bind '~binding ~parser) parser))]
+                   'rest ['binding 'elem] '[`(pattern/->Rest ~(if binding `(->Bind '~binding ~(first elem)) (first elem)))]
+                   'map ['map] '(into {} map)
+                   'any [] '`(pattern/->Any)
+                   'default ['default] '`'~default))
 
 ;; TODO error reporting here
 (defn desugar [name sugar]
@@ -59,10 +61,10 @@
   ([sugar input]
      (let-syms [input-sym]
                `(let [~input-sym ~input]
-                  ~(pattern/pattern->clj (eval (desugar 'pattern sugar)) input-sym #{:output}
-                                         (fn [output remaining] [output remaining]))))))
+                  ~(pattern/pattern->clj (eval (desugar 'pattern sugar)) input-sym true {}
+                                         (fn [output remaining _] [output remaining]))))))
 
-(defmacro sugars [& names&sugars]
+(defmacro patterns [& names&sugars]
   (let [name->sugar (for-map [[name sugar] (partition 2 names&sugars)] name sugar)]
     `(let [~@(aconcat (for [[name _] name->sugar] [name `(->Bind '~name (->View '~name))]))]
        ~(for-map [[name sugar] name->sugar] `'~name `(->Bind '~name (pattern ~sugar))))))
@@ -73,11 +75,11 @@
 (defmacro is [sugar]
   `(->Is (pattern ~sugar)))
 
-(defmacro guard [sugar form]
-  `(->Guard (pattern ~sugar) ~form))
+(defmacro guard [sugar syms form]
+  `(->Guard (pattern ~sugar) ~syms ~form))
 
-(defmacro output [sugar form]
-  `(->Output (pattern ~sugar) ~form))
+(defmacro output [sugar syms form]
+  `(->Output (pattern ~sugar) ~syms ~form))
 
 (defmacro or [& sugars]
   `(->Or [~@(for [sugar sugars] `(pattern ~sugar))]))
@@ -104,7 +106,7 @@
   (view [1 2 & * 3] [1 2])
   (view [1 2 & * 3] [1 2 3 3 3])
   (view [1 2 & * 3] [1 2 3 3 3 4])
-  (view ~(output [1 2 ^rest & * 3] 'rest) [1 2 3 3 3])
+  (view ~(output [1 2 ^rest & * 3] ['rest] 'rest) [1 2 3 3 3])
   (pattern ~(or [(->Bind 'succ (->View 'succ)) (->Bind 'zero (->View 'zero))]))
   (macroexpand-1 '(pattern (1 2 3)))
   (macroexpand-1 '(pattern (succ)))

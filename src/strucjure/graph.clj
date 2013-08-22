@@ -6,10 +6,10 @@
 ;; TODO call stack may become a problem
 ;; TODO allow parts of the graph to take args eg bindable in sugar
 
-(defn output-in [name->pattern & names&forms]
+(defn output-in [name->pattern & names&syms&forms]
   (apply assoc name->pattern
-         (aconcat (for [[name form] (partition 2 names&forms)]
-                    [name (pattern/->Output (name->pattern name) form)]))))
+         (aconcat (for [[name syms form] (partition 3 names&syms&forms)]
+                    [name (pattern/->Output (name->pattern name) syms form)]))))
 
 (defn patterns->graph [name->pattern]
   `(with-meta
@@ -71,15 +71,16 @@
         (println (str (indent depth) "X ") name)))))
 
 (comment
-  (use 'strucjure.pattern 'clojure.pprint)
+  (use 'strucjure.pattern 'clojure.pprint 'clojure.stacktrace)
+  (e)
   (def eg-num
     {'num (->Or [(->View 'zero) (->View 'succ)])
      'zero 'zero
-     'succ (list 'succ (->Bind (->View 'num) 'x))})
+     'succ (list 'succ (->Bind 'x (->View 'num)))})
   (def eg-num-out
     (output-in eg-num
-               'zero '0
-               'succ '(inc x)))
+               'zero [] '0
+               'succ ['x] `(inc ~'x)))
   (patterns->graph eg-num-out)
   (def num-graph (eval (patterns->graph eg-num-out)))
   (def num (graph->view (trace num-graph) 'num))

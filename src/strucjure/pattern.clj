@@ -1,5 +1,5 @@
 (ns strucjure.pattern
-  (:require clojure.set
+  (:require [clojure.set :refer [union]]
             [strucjure.util :refer [when-nil let-syms free-syms]]))
 
 ;; TODO Record
@@ -8,42 +8,38 @@
 ;; TODO when gen is added, pattern->clj will be a poor name
 ;; TODO need a general way to indicate that output is unchanged for eg WithMeta
 ;;      just check (= input output)?
-;; TODO let &input and &output in Output, Is, When -- actually, that breaks output optimisations
-;; TODO maybe pass bindings like output/remaining and only let them when used in forms
-;;      or maybe just use closures and stop trying to imitate them in code - what is the overhead?
-;;      ^{::used #{'a 'b}} (fn [a b] ...)
-;;      also fixes the Or optimisation - sufficient to check if bindings is same in each case (Or should let-input)
-;;      but can't embed closures in the generated code
-;;      bound vs free. this is what I'm giving you and this is what I want from you
-;;      (with-env usable form)
-;;      still hard to quasiquote correctly - what if the underlying pattern is changed? probably best not to change the quoting because then it won't match user assumptions?
-;;      could just be explicit about which symbols we expect? not terrible for output-in but a mess for guard
-;;      really have two different cases - could have implicit in sugar and explicit in raw
 ;; TODO need to be careful about reusing input - a (let-sym [input `(meta input)] ...) would be useful here
 ;;      let-syms -> with-syms, then use let-sym
 ;; TODO pattern debugger via *pattern->clj*
 ;; TODO think carefully about seq vs list
 ;; TODO might have to rething Rest - is frequently ugly eg in sugar
+;; TODO could return to having implicit equality but would require careful thinking about Guard/Output
+;;      state needs to track 'has it been bound before' and 'will it need to be bound again' - not exclusive
 
 (defprotocol IPattern
-  (pattern->clj [this input used? result->body]))
+  (pattern->clj [this input output? state result->body]
+    "Compile a pattern into clojure which returns nil on failure or hands control to result->body on success.
+     input -- form, input to the pattern
+     output? -- bool, whether the output of this pattern is used anywhere
+     state -- {symbol :bound/:free}, :bound symbols are in scope already, :free symbols are used somewhere in the body
+     result->body -- (fn [output remaining] form), returns the body to be evaluated on success, should be called *exactly* once"))
 
 ;; --- REST ---
 
 (defrecord Rest [pattern]
   IPattern
-  (pattern->clj [this input used? result->body]
-    (throw (Exception. (str "Compiling strucjure.pattern.Rest outside of seq: " this)))))
+  (pattern->clj [this input output? state result->body]
+    (throw (Exception. (pr-str "Compiling strucjure.pattern.Rest outside of seq: " this)))))
 
-(defn head->clj [pattern input used? result->body]
+(defn head->clj [pattern input output? state result->body]
   (if (instance? Rest pattern)
-    (pattern->clj (:pattern pattern) input used? result->body)
+    (pattern->clj (:pattern pattern) input output? state result->body)
     (let-syms [first-input rest-input]
               `(when-let [[~first-input & ~rest-input] ~input]
-                 ~(pattern->clj pattern first-input used?
-                                (fn [output remaining]
+                 ~(pattern->clj pattern first-input output? state
+                                (fn [output remaining state]
                                   (when-nil remaining
-                                            (result->body output rest-input))))))))
+                                            (result->body output rest-input state))))))))
 
 (defn cons->clj [pattern first rest]
   (if (instance? Rest pattern)
@@ -57,175 +53,195 @@
 
 ;; --- VALUE PATTERNS ---
 
-(defn seq->clj* [patterns input used? result->body]
+(defn seq->clj* [patterns input output? state result->body]
   (if-let [[first-pattern & rest-pattern] (seq patterns)]
-    (head->clj first-pattern input used?
-               (fn [first-output first-remaining]
-                 (seq->clj* rest-pattern first-remaining used?
-                            (fn [rest-output rest-remaining]
-                              (result->body (cons->clj first-pattern first-output rest-output) rest-remaining)))))
-    (result->body nil input)))
+    (head->clj first-pattern input output? state
+               (fn [first-output first-remaining state]
+                 (seq->clj* rest-pattern first-remaining output? state
+                            (fn [rest-output rest-remaining state]
+                              (result->body (cons->clj first-pattern first-output rest-output) rest-remaining state)))))
+    (result->body nil input state)))
 
-(defn seq->clj [patterns input used? result->body]
+(defn seq->clj [patterns input output? state result->body]
   (let-syms [seq-input]
             `(let [~seq-input (seq ~input)]
-               ~(seq->clj* patterns seq-input used? result->body))))
+               ~(seq->clj* patterns seq-input output? state result->body))))
 
-(defn vec->clj [patterns index input used? result->body]
+(defn vec->clj [patterns index input output? state result->body]
   (if (< index (count patterns))
-    (pattern->clj (nth patterns index) `(nth ~input ~index) used?
-                  (fn [index-output index-remaining]
+    (pattern->clj (nth patterns index) `(nth ~input ~index) output? state
+                  (fn [index-output index-remaining state]
                     (when-nil index-remaining
-                              (vec->clj patterns (inc index) input used?
-                                        (fn [vec-output vec-remaining]
-                                          (result->body (vec (cons index-output vec-output)) vec-remaining))))))
-    (result->body [] `(seq (subvec ~input ~index)))))
+                              (vec->clj patterns (inc index) input output? state
+                                        (fn [vec-output vec-remaining state]
+                                          (result->body (vec (cons index-output vec-output)) vec-remaining state))))))
+    (result->body [] `(seq (subvec ~input ~index)) state)))
 
-(defn map->clj [patterns input used? result->body]
+(defn map->clj [patterns input output? state result->body]
   (if-let [[[key value-pattern] & rest-pattern] (seq patterns)]
-    (pattern->clj value-pattern `(get ~input ~key) used?
-                  (fn [value-output value-remaining]
+    (pattern->clj value-pattern `(get ~input ~key) output? state
+                  (fn [value-output value-remaining state]
                     (when-nil value-remaining
-                              (map->clj rest-pattern input used?
-                                        (fn [rest-output _]
-                                          (result->body `(assoc ~rest-output ~key ~value-output) nil))))))
-    (result->body input nil)))
+                              (map->clj rest-pattern input output? state
+                                        (fn [rest-output _ state]
+                                          (result->body `(assoc ~rest-output ~key ~value-output) nil state))))))
+    (result->body input nil state)))
 
 (extend-protocol IPattern
   nil
-  (pattern->clj [this input used? result->body]
+  (pattern->clj [this input output? state result->body]
     `(when (nil? ~input)
-       ~(result->body nil nil)))
+       ~(result->body nil nil state)))
   Object
-  (pattern->clj [this input used? result->body]
+  (pattern->clj [this input output? state result->body]
     `(when (= ~input '~this)
-       ~(result->body input nil)))
+       ~(result->body input nil state)))
   clojure.lang.ISeq
-  (pattern->clj [this input used? result->body]
+  (pattern->clj [this input output? state result->body]
     `(when (seq? ~input)
-       ~(seq->clj this input used? result->body)))
+       ~(seq->clj this input output? state result->body)))
   clojure.lang.IPersistentVector
-  (pattern->clj [this input used? result->body]
+  (pattern->clj [this input output? state result->body]
     `(when (vector? ~input)
        ~(if (some #(instance? Rest %) this)
-          (seq->clj this input used?
-                    (fn [output remaining] (result->body `(vec ~output) remaining)))
+          (seq->clj this input output? state
+                    (fn [output remaining state] (result->body `(vec ~output) remaining state)))
           `(when (>= (count ~input) ~(count this))
-             ~(vec->clj this 0 input used? result->body)))))
+             ~(vec->clj this 0 input output? state result->body)))))
   clojure.lang.IPersistentMap
-  (pattern->clj [this input used? result->body]
+  (pattern->clj [this input output? state result->body]
     `(when (instance? clojure.lang.IPersistentMap ~input)
-       ~(map->clj this input used? result->body))))
+       ~(map->clj this input output? state result->body))))
 
 (defrecord Seqable [patterns]
   IPattern
-  (pattern->clj [this input used? result->body]
+  (pattern->clj [this input output? state result->body]
     `(when (instance? clojure.lang.Seqable ~input)
-       ~(seq->clj patterns input used? result->body))))
+       ~(seq->clj patterns input output? state result->body))))
 
 ;; --- LOGICAL PATTERNS ---
 
 (defrecord Any []
   IPattern
-  (pattern->clj [this input used? result->body]
-    (result->body input nil)))
+  (pattern->clj [this input output? state result->body]
+    (result->body input nil state)))
 
 (defrecord Is [form]
   IPattern
-  (pattern->clj [this input used? result->body]
+  (pattern->clj [this input output? state result->body]
     `(when (let [~'&input ~input] ~form)
-       ~(result->body input nil))))
+       ~(result->body input nil state))))
 
-(defrecord Guard [pattern form]
+(defrecord Guard [pattern syms form]
   IPattern
-  (pattern->clj [this input used? result->body]
-    (pattern->clj pattern input
-                  (clojure.set/union used? (free-syms form))
-                  (fn [output remaining]
+  (pattern->clj [this input output? state result->body]
+    (pattern->clj pattern input output?
+                  (apply assoc state (interleave syms (repeat :free)))
+                  (fn [output remaining state]
+                    (assert (every? #(= :bound (state %)) syms)
+                            (pr-str "All free variables in the guard must be bound in the enclosed pattern:" this state syms))
                     `(when ~form
-                       ~(result->body output remaining))))))
+                       ~(result->body output remaining state))))))
 
 (defrecord Bind [symbol pattern]
   IPattern
-  (pattern->clj [this input used? result->body]
-    (if (used? symbol)
-      (pattern->clj pattern input (conj used? :output)
-                    (fn [output remaining]
+  (pattern->clj [this input output? state result->body]
+    (if (= :free (state symbol))
+      (pattern->clj pattern input true
+                    (assoc state symbol :bound)
+                    (fn [output remaining state]
                       `(let [~symbol ~output]
-                         ~(result->body symbol remaining))))
-      (pattern->clj pattern input used? result->body))))
+                         ~(result->body symbol remaining state))))
+      (pattern->clj pattern input output? state result->body))))
 
-(defrecord Output [pattern form]
+(defrecord Output [pattern syms form]
   IPattern
-  (pattern->clj [this input used? result->body]
-    (pattern->clj pattern input
-                  (clojure.set/union (disj used? :output) (free-syms form))
-                  (fn [_ remaining] (result->body form remaining)))))
+  (pattern->clj [this input output? state result->body]
+    (pattern->clj (->Bind '&output pattern) input false
+                  (reduce #(assoc %1 %2 :free) state syms)
+                  (fn [_ remaining state]
+                    (assert (every? #(= :bound (state %)) syms)
+                            (pr-str "All free variables in the output must be bound in the enclosed pattern:" this state syms))
+                    (result->body form remaining state)))))
 
-(defn pattern->results [pattern used?]
-  (let [results (atom #{})]
-    (pattern->clj pattern 'input used? (fn [output remaining] (swap! results conj [output remaining])))
-    @results))
+(defn bound-since [old-state new-state]
+  (for [key (keys new-state)
+        :when (= :bound (new-state key))
+        :when (not= :bound (old-state key))]
+    key))
 
 (defrecord Or [patterns]
   IPattern
-  (pattern->clj [this input used? result->body]
-    (let [results (map #(pattern->results % used?) patterns)]
-      (if (every? #(= #{[input nil]} %) results)
-        ;; TODO is this safe for binding?
-        `(when (or ~@(for [pattern patterns]
-                       (pattern->clj pattern input used? (fn [_ _] true))))
-           ~(result->body input nil))
-        `(or ~@(for [pattern patterns]
-                 (pattern->clj pattern input used? result->body)))))))
+  (pattern->clj [this input output? state result->body]
+    (assert patterns (pr-str "Or cannot be empty: " this))
+    (let [states (atom #{})
+          branches (doall (for [pattern patterns]
+                            (pattern->clj pattern input output? state
+                                          (fn [output remaining state']
+                                            (swap! states conj state')
+                                            (apply vector output remaining (bound-since state state'))))))
+          ;; TODO will need some kind of merge here if we allow other things in state
+          _ (assert (= 1 (count @states)) (pr-str "All patterns in Or must have the same set of bindings: " this @states))
+          state' (first @states)]
+      (let-syms [output remaining]
+                `(when-let [~(apply vector output remaining (bound-since state state')) (or ~@branches)]
+                   ~(result->body output remaining state'))))))
 
 (defrecord And [patterns]
   IPattern
-  (pattern->clj [this input used? result->body]
-    (if-let [[first-pattern & rest-pattern] (seq patterns)]
+  (pattern->clj [this input output? state result->body]
+    (assert patterns (pr-str "And cannot be empty: " this))
+    (let [[first-pattern & rest-pattern] (seq patterns)]
       (if rest-pattern
-        (pattern->clj first-pattern input used? (fn [_ _] (pattern->clj (->And rest-pattern) input used? result->body)))
-        (pattern->clj first-pattern input used? result->body))
-      (throw (Exception. "Empty And")))))
+        (pattern->clj first-pattern input output? state
+                      (fn [_ _ state] (pattern->clj (->And rest-pattern) input output? state result->body)))
+        (pattern->clj first-pattern input output? state result->body)))))
 
 (defrecord ZeroOrMore [pattern]
   IPattern
-  (pattern->clj [this input used? result->body]
+  (pattern->clj [this input output? state result->body]
     (let-syms [loop-output loop-remaining output remaining]
-              (let [binding (if (used? :output) [output remaining] [remaining])
-                    return (fn [output remaining] (if (used? :output) [output remaining] [remaining]))
-                    output-acc (when (used? :output) (conj->clj pattern output loop-output))]
+              (let [binding (if output? [output remaining] [remaining])
+                    output-acc (when output? (conj->clj pattern output loop-output))
+                    states (atom #{})
+                    loop-body (head->clj pattern loop-remaining output? state
+                                         (fn [output remaining state']
+                                           (swap! states conj state')
+                                           (if output? [output remaining] [remaining])))
+                    _ (assert (= 1 (count @states)) (pr-str "result->body should be called exactly once: " pattern))
+                    state' (first @states)]
                 `(when (or (nil? ~input) (seq? ~input))
                    (loop [~loop-output [] ~loop-remaining (seq ~input)]
-                     (if-let [~binding (and ~loop-remaining ~(head->clj pattern loop-remaining used? return))]
+                     (if-let [~binding (and ~loop-remaining ~loop-body)]
                        (recur ~output-acc ~remaining)
-                       ~(result->body `(seq ~loop-output) loop-remaining))))))))
+                       ~(result->body `(seq ~loop-output) loop-remaining state'))))))))
 
 (defrecord WithMeta [pattern meta-pattern]
   IPattern
-  (pattern->clj [this input used? result->body]
+  (pattern->clj [this input output? state result->body]
     (let-syms [input-meta]
-              (pattern->clj pattern input used?
-                            (fn [output remaining]
-                              (pattern->clj meta-pattern `(meta ~input) used?
-                                            (fn [meta-output meta-remaining]
+              (pattern->clj pattern input output? state
+                            (fn [output remaining state]
+                              (pattern->clj meta-pattern `(meta ~input) output? state
+                                            (fn [meta-output meta-remaining state]
                                               (when-nil meta-remaining
-                                                        (result->body `(if (nil? ~meta-output) ~output (with-meta ~output ~meta-output)) remaining)))))))))
+                                                        (result->body
+                                                         `(if (nil? ~meta-output) ~output (with-meta ~output ~meta-output))
+                                                         remaining state)))))))))
 
 (defrecord View [form]
   IPattern
-  (pattern->clj [this input used? result->body]
+  (pattern->clj [this input output? state result->body]
     (let-syms [view-output view-remaining]
               `(when-let [[~view-output ~view-remaining] (~form ~input)]
-                 ~(result->body view-output view-remaining)))))
+                 ~(result->body view-output view-remaining state)))))
 
 (defn pattern->view [pattern]
   (let-syms [input]
             `(fn [~input]
-               ~(pattern->clj pattern input #{:output} (fn [output remaining] [output remaining])))))
+               ~(pattern->clj pattern input true {} (fn [output remaining _] [output remaining])))))
 
 (comment
-  (use 'strucjure.pattern)
   (use 'clojure.stacktrace)
   (e)
   (pattern->view (->Bind 1 'a))
@@ -239,14 +255,14 @@
   ((eval (pattern->view (list 1 2))) 1)
   (let [a (eval (pattern->view 1))] (pattern->view (list (->View a) 2)))
   (let [a (eval (pattern->view 1))] ((eval (pattern->view (list (->View a) 2))) (list 1 2 3)))
+  ((eval (pattern->view (list))) (list))
   ((eval (pattern->view (list))) (list 1 2))
-  (pattern->clj (->ZeroOrMore 1) 'input #{} (fn [output remaining] [remaining]))
-  (pattern->clj (->ZeroOrMore 1) 'input #{:output} (fn [output remaining] [output remaining]))
+  ((eval (pattern->view (list))) nil)
   ((eval (pattern->view (->ZeroOrMore 1))) (list))
   ((eval (pattern->view (->ZeroOrMore 1))) (list 2))
   ((eval (pattern->view (->ZeroOrMore 1))) (list 1 1))
   ((eval (pattern->view (->ZeroOrMore 1))) (list 1 1 2))
-  ((eval (pattern->view (->ZeroOrMore (->Or [1 2])))) (list 1 2 1 2))
+  ((eval (pattern->view (->ZeroOrMore (->Or [1 2])))) (list 1 2 1 2 3))
   (pattern->view (->ZeroOrMore 1))
   (pattern->view (->Output (->ZeroOrMore 1) ''ones))
   (pattern->view (->Output (->Bind (->ZeroOrMore 1) 'a) 'a))
@@ -265,5 +281,6 @@
   ((eval (pattern->view (->Seqable [(->Rest (->ZeroOrMore [(->Any) (->Any)]))]))) '{:foo 1 :bar (& * 3)})
   ((eval (pattern->view (->And [{} (->Bind 'elems (->Seqable [(->Rest (->ZeroOrMore [(->Any) (->Any)]))]))]))) '{:foo 1 :bar (& * 3)})
   ((eval (pattern->view [(->Any) (->Any)])) (first (seq '{:foo 1 :bar (& * 3)})))
-  (eval (pattern->view (->Output (list (->WithMeta (->Bind 'prefix (->Or ['*]))) (->Rest (->View 'inc))) 'prefix)))
+  (eval (pattern->view (->Output (list (->WithMeta (->Bind 'prefix (->Or ['*])) (->Any)) (->Rest (->View 'inc))) 'prefix)))
+  ((eval (pattern->view (->Output (->Bind 'a (list 1 (->Bind 'a 2))) 'a)))) (list 1 2)
   )

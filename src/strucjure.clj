@@ -14,10 +14,11 @@
 ;; figure out how to roundtrip pre/post closures through eval
 ;; need to be able to alter views (store original pattern in meta and have pattern/alter and graph/alter)
 ;; need to be able to walk patterns for eg determining dependencies in graph so can ignore in lenses
-;; cut by returning delay to Or
+;; cut by returning delay - can trampoline to the nearest try - needs work inside Or/ZeroOrMore
 ;; gens
 ;; type hinting
-;; string patterns, ~(chain "foo" "/" "bar"), may have to rethink seq patterns
+;; may need to rethink seq patterns and Rest
+;; string patterns, ~(chain "foo" "/" "bar")
 ;; binary patterns
 ;; reimplement core
 

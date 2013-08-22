@@ -1,13 +1,23 @@
 (ns strucjure)
 
 ;; --- TODO ---
-;; check if output unchanged in patterns - maybe rethink how output/bindings are passed
-;; figure out binding - either syntax-quote or use fns
-;; go back to using letfn for graph
-;; debugging - deepest-error, trace-pattern, trace-graph
+;; need to be careful about reusing input - a (let-sym [input `(meta input)] ...) would be useful here
+;;      let-syms -> with-syms, then use let-sym
+;; go back to using letfn for graph, along with pre/post
+;; error reporting - deepest-error in graph, maybe first-error in pattern
+;; debugging - trace-pattern, trace-graph
 ;; let input in patterns
 ;; tests (regression, readme, bootstrap, generative)
 ;; README
+
+;; --- ERRORS ---
+;; maybe need to rethink [o r] vs nil
+;; need to return failure messages
+;; can they be tracked imperatively?
+;; later on, cut and commit will require modifying (when-let [[o r] ...] ...)
+
+;; --- OPTIMISTIONS ---
+;; check if output unchanged in patterns - maybe rethink how output/bindings are passed
 
 ;; --- LATER ---
 ;; figure out how to roundtrip pre/post closures through eval

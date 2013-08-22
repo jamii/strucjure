@@ -1,6 +1,6 @@
 (ns strucjure.sugar
   (:require [plumbing.core :refer [fnk for-map aconcat]]
-            [strucjure.util :refer [let-syms]]
+            [strucjure.util :refer [with-syms]]
             [strucjure.pattern :as pattern :refer [->Rest ->Seqable ->Any ->Is ->Guard ->Bind ->Output ->Or ->And ->ZeroOrMore ->WithMeta ->View]]
             [strucjure.graph :as graph]))
 
@@ -16,12 +16,13 @@
           (bindable [pattern] (->WithMeta pattern (->Or [{:tag (->Or [(view 'binding) (->Bind 'binding nil)])} (->Bind 'binding nil)])))]
     {'pattern (bindable (->Or [(view 'unquote) (view 'seq) (view 'vec) (view 'map) (view 'any) (view 'default)]))
      'unquote (list `unquote (->Bind 'unquoted (->Any)))
-     'seq (list (->Rest (->Bind 'elems (->ZeroOrMore (->Rest (view 'elem))))))
-     'vec (vector (->Rest (->Bind 'elems (->ZeroOrMore (->Rest (view 'elem))))))
+     'seq (list (->Rest (view 'elems)))
+     'vec (vector (->Rest (view 'elems)))
+     'elems (->ZeroOrMore (->Rest (view 'elem)))
      'elem (->Or [(view 'parser) (view 'rest) (list (view 'pattern))])
      'parser (list (bindable (->Bind 'prefix (->Or ['*]))) (->Rest (view 'elem))) ;; TODO + ?
      'rest (list (bindable '&) (->Rest (view 'elem)))
-     'map (->And [{} (->Bind 'elems (->Seqable [(->Rest (->ZeroOrMore [(->Any) (view 'pattern)]))]))])
+     'map (->And [{} (->Bind 'elems (->Seqable [(->Rest (->ZeroOrMore [(->Any) (view 'pattern)]))]))]) ;; TODO make s/hashmap for this pattern
      'binding (->Is #(symbol? %))
      'any '_
      'default (->Any)}))
@@ -59,10 +60,8 @@
   ([sugar]
      (pattern/pattern->view (eval (desugar 'pattern sugar))))
   ([sugar input]
-     (let-syms [input-sym]
-               `(let [~input-sym ~input]
-                  ~(pattern/pattern->clj (eval (desugar 'pattern sugar)) input-sym true {}
-                                         (fn [output remaining _] [output remaining]))))))
+     (pattern/*pattern->clj* (eval (desugar 'pattern sugar)) input true {}
+                             (fn [output remaining _] [output remaining]))))
 
 (defmacro patterns [& names&sugars]
   (let [name->sugar (for-map [[name sugar] (partition 2 names&sugars)] name sugar)]
@@ -72,8 +71,8 @@
 (defmacro seqable [& sugars]
   `(->Seqable (pattern ~sugars)))
 
-(defmacro is [fn]
-  `(->Is ~fn))
+(defmacro is [& f]
+  `(->Is #(~f)))
 
 (defmacro guard [sugar fnk]
   `(->Guard (pattern ~sugar) ~fnk))
@@ -95,9 +94,6 @@
 
 (defmacro with-meta [sugar meta-sugar]
   `(->WithMeta (pattern ~sugar) (pattern ~meta-sugar)))
-
-(defmacro view! [form]
-  `(->View '~form))
 
 (comment
   (pattern [1 2 & * 3])
@@ -124,28 +120,3 @@
   (num '(1 (succ zero)))
   (num '(succ succ))
 )
-
-(comment
-  (def pattern-pattern
-    (s/graph
-     pattern ~(s/with-meta ~unbound-pattern {:tag ~binding})
-     unbound-pattern ~(s/or ~unquote ~seq ~vec ~map ~binding ~any ~symbol _)
-     unquote (~`unquote _)
-     seq (& ^elems * & elem)
-     vec [& ^elems * & elem]
-     elem ~(s/or (~pattern) ~parser ~rest)
-     parser (~(s/with-meta ^prefix ~(s/or ~'* ~'+ ~'?) {:tag ~binding}) ~pattern)
-     rest (~(s/with-meta ~'& {:tag ~binding}) ~pattern)
-     map ~(s/and {} ^elems ~(s/seqable & * (~key ~pattern)))
-     key ~(s/is keyword? &input)
-     binding ~(s/is symbol? &input)
-     any ~'_
-     symbol ~(s/is symbol? &input))))
-
-(comment
-  (def desugar-pattern
-    (s/update-graph pattern-pattern
-                    unquote (s/=> ~% (_ ?body) ~body)
-                    parser (s/=> ~% (?action ?sub-pattern) `(~(in-raw action) ~sub-pattern))
-                    binding (s/=> ~% (->Bind (nullable? &output) (binding-name &output)))
-                    symbol (s/=> ~% `'~&output))))

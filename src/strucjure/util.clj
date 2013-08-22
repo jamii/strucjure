@@ -7,9 +7,9 @@
     body
     `(when (nil? ~form) ~body)))
 
-(defmacro let-syms [syms & rest]
+(defmacro with-syms [syms & body]
   `(let ~(vec (apply concat (for [sym syms] [sym `(gensym ~(str sym))])))
-     ~@rest))
+     ~@body))
 
 (defn key->sym [key]
   (symbol (.substring (str key) 1)))

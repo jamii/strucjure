@@ -6,8 +6,7 @@
 ;; go back to using letfn for graph
 ;; debugging - deepest-error, trace-pattern, trace-graph
 ;; let input in patterns
-;; fix / remove the Or 'optimisation'
-;; tests
+;; tests (regression, readme, bootstrap, generative)
 ;; README
 
 ;; --- LATER ---

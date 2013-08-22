@@ -1,6 +1,7 @@
 (ns strucjure.pattern
   (:require [clojure.set :refer [union]]
-            [strucjure.util :refer [when-nil let-syms free-syms]]))
+            [plumbing.core :refer [fnk]]
+            [strucjure.util :refer [when-nil let-syms fnk->clj]]))
 
 ;; TODO Record
 ;; TODO Set? (how would you match subpatterns? maybe only allow bind/with-meta? or only value patterns)
@@ -15,6 +16,7 @@
 ;; TODO might have to rething Rest - is frequently ugly eg in sugar
 ;; TODO could return to having implicit equality but would require careful thinking about Guard/Output
 ;;      state needs to track 'has it been bound before' and 'will it need to be bound again' - not exclusive
+;; TODO should View take a fn instead of a form? where do we want to eval it?
 
 (defprotocol IPattern
   (pattern->clj [this input output? state result->body]
@@ -126,22 +128,23 @@
   (pattern->clj [this input output? state result->body]
     (result->body input nil state)))
 
-(defrecord Is [form]
+(defrecord Is [f]
   IPattern
   (pattern->clj [this input output? state result->body]
-    `(when (let [~'&input ~input] ~form)
+    `(when (~f ~input)
        ~(result->body input nil state))))
 
-(defrecord Guard [pattern syms form]
+(defrecord Guard [pattern fnk]
   IPattern
   (pattern->clj [this input output? state result->body]
-    (pattern->clj pattern input output?
-                  (apply assoc state (interleave syms (repeat :free)))
-                  (fn [output remaining state]
-                    (assert (every? #(= :bound (state %)) syms)
-                            (pr-str "All free variables in the guard must be bound in the enclosed pattern:" this state syms))
-                    `(when ~form
-                       ~(result->body output remaining state))))))
+    (let [[args call] (fnk->clj fnk)]
+      (pattern->clj pattern input output?
+                    (apply assoc state (interleave args (repeat :free)))
+                    (fn [output remaining state]
+                      (assert (every? #(= :bound (state %)) args)
+                              (pr-str "All free variables in the guard must be bound in the enclosed pattern:" this state args))
+                      `(when ~call
+                         ~(result->body output remaining state)))))))
 
 (defrecord Bind [symbol pattern]
   IPattern
@@ -154,15 +157,16 @@
                          ~(result->body symbol remaining state))))
       (pattern->clj pattern input output? state result->body))))
 
-(defrecord Output [pattern syms form]
+(defrecord Output [pattern fnk]
   IPattern
   (pattern->clj [this input output? state result->body]
-    (pattern->clj (->Bind '&output pattern) input false
-                  (reduce #(assoc %1 %2 :free) state syms)
-                  (fn [_ remaining state]
-                    (assert (every? #(= :bound (state %)) syms)
-                            (pr-str "All free variables in the output must be bound in the enclosed pattern:" this state syms))
-                    (result->body form remaining state)))))
+    (let [[args call] (fnk->clj fnk)]
+      (pattern->clj (->Bind '&output pattern) input false
+                    (reduce #(assoc %1 %2 :free) state args)
+                    (fn [_ remaining state]
+                      (assert (every? #(= :bound (state %)) args)
+                              (pr-str "All free variables in the output must be bound in the enclosed pattern:" this state args))
+                      (result->body call remaining state))))))
 
 (defn bound-since [old-state new-state]
   (for [key (keys new-state)
@@ -272,15 +276,10 @@
   ((eval (pattern->view [1 2])) [1 2])
   ((eval (pattern->view [1 2])) [1 2 3])
   ((eval (pattern->view [1 2])) [1 3])
-  (pattern->view [1 2 (->Bind (->Any) 'a)])
-  (pattern->view (->Output [1 2 (->Bind (->Any) 'a)] 'a))
-  (pattern->view [1 2 (->Rest (->Any))])
-  (pattern->view {1 2 3 (->Bind (->Any) 'a)})
-  (pattern->view (->Output {1 2 3 (->Bind (->Any) 'a)} 'a))
   ((eval (pattern->view (list (->Rest (->Bind 'elems (->ZeroOrMore (->Rest (->Any)))))))) (list 1 2 3))
   ((eval (pattern->view (->Seqable [(->Rest (->ZeroOrMore [(->Any) (->Any)]))]))) '{:foo 1 :bar (& * 3)})
   ((eval (pattern->view (->And [{} (->Bind 'elems (->Seqable [(->Rest (->ZeroOrMore [(->Any) (->Any)]))]))]))) '{:foo 1 :bar (& * 3)})
   ((eval (pattern->view [(->Any) (->Any)])) (first (seq '{:foo 1 :bar (& * 3)})))
   (eval (pattern->view (->Output (list (->WithMeta (->Bind 'prefix (->Or ['*])) (->Any)) (->Rest (->View 'inc))) 'prefix)))
-  ((eval (pattern->view (->Output (->Bind 'a (list 1 (->Bind 'a 2))) 'a)))) (list 1 2)
+  ((eval (pattern->view (->Output (->Bind 'a (list 1 (->Bind 'a 2))) (fnk [a] a)))) (list 1 2))
   )

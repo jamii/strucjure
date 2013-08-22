@@ -1,15 +1,15 @@
 (ns strucjure.graph
-  (:require [plumbing.core :refer [for-map aconcat]]
+  (:require [plumbing.core :refer [fnk for-map aconcat]]
             [strucjure.pattern :as pattern]))
 
 ;; TODO get-in with-deepest-error
 ;; TODO call stack may become a problem
 ;; TODO allow parts of the graph to take args eg bindable in sugar
 
-(defn output-in [name->pattern & names&syms&forms]
+(defn output-in [name->pattern & names&fnks]
   (apply assoc name->pattern
-         (aconcat (for [[name syms form] (partition 3 names&syms&forms)]
-                    [name (pattern/->Output (name->pattern name) syms form)]))))
+         (aconcat (for [[name fnk] (partition 2 names&fnks)]
+                    [name (pattern/->Output (name->pattern name) fnk)]))))
 
 (defn patterns->graph [name->pattern]
   `(with-meta
@@ -79,8 +79,8 @@
      'succ (list 'succ (->Bind 'x (->View 'num)))})
   (def eg-num-out
     (output-in eg-num
-               'zero [] '0
-               'succ ['x] `(inc ~'x)))
+               'zero (fnk [] 0)
+               'succ (fnk [x] (inc x))))
   (patterns->graph eg-num-out)
   (def num-graph (eval (patterns->graph eg-num-out)))
   (def num (graph->view (trace num-graph) 'num))

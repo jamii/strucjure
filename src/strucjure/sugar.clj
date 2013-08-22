@@ -1,5 +1,5 @@
 (ns strucjure.sugar
-  (:require [plumbing.core :refer [for-map aconcat]]
+  (:require [plumbing.core :refer [fnk for-map aconcat]]
             [strucjure.util :refer [let-syms]]
             [strucjure.pattern :as pattern :refer [->Rest ->Seqable ->Any ->Is ->Guard ->Bind ->Output ->Or ->And ->ZeroOrMore ->WithMeta ->View]]
             [strucjure.graph :as graph]))
@@ -7,6 +7,7 @@
 ;; TODO wrapping parser/rest in [] and calling first (elem) is ugly
 ;; TODO might want to move all the complicated stuff to sugar.graph in case it gets trampled on by the macros
 ;; TODO output-in macro, syntax-quote in guard/output
+;; TODO view! graph!
 
 (defn with-named-nodes [name->pattern]
   (clojure.core/with-meta
@@ -24,7 +25,7 @@
      'parser (list (bindable (->Bind 'prefix (->Or ['*]))) (->Rest (view 'elem))) ;; TODO + ?
      'rest (list (bindable '&) (->Rest (view 'elem)))
      'map (->And [{} (->Bind 'elems (->Seqable [(->Rest (->ZeroOrMore [(->Any) (view 'pattern)]))]))])
-     'binding (->Is `(symbol? ~'&input))
+     'binding (->Is #(symbol? %))
      'any '_
      'default (->Any)}))
 
@@ -33,15 +34,17 @@
 
 (def desugar-patterns
   (graph/output-in (with-named-nodes sugar-patterns)
-                   'pattern ['binding 'pattern] '(if binding `(->Bind '~binding ~pattern) pattern)
-                   'unquote ['unquoted] 'unquoted
-                   'seq ['seq] '`(list ~@seq)
-                   'parser ['binding 'prefix 'elem] '[(let [parser `(~(prefixes prefix) ~(first elem))]
-                                                        (if binding `(->Bind '~binding ~parser) parser))]
-                   'rest ['binding 'elem] '[`(pattern/->Rest ~(if binding `(->Bind '~binding ~(first elem)) (first elem)))]
-                   'map ['map] '(into {} map)
-                   'any [] '`(pattern/->Any)
-                   'default ['default] '`'~default))
+                   'pattern (fnk [binding pattern] (if binding `(->Bind '~binding ~pattern) pattern))
+                   'unquote (fnk [unquoted] unquoted)
+                   'seq (fnk [seq] `(list ~@seq))
+                   'parser (fnk [binding prefix elem]
+                                [(let [parser `(~(prefixes prefix) ~(first elem))]
+                                   (if binding `(->Bind '~binding ~parser) parser))])
+                   'rest (fnk [binding elem]
+                              [`(pattern/->Rest ~(if binding `(->Bind '~binding ~(first elem)) (first elem)))])
+                   'map (fnk [map] (into {} map))
+                   'any (fnk [] `(pattern/->Any))
+                   'default (fnk [default] `'~default)))
 
 ;; TODO error reporting here
 (defn desugar [name sugar]
@@ -72,14 +75,14 @@
 (defmacro seqable [& sugars]
   `(->Seqable (pattern ~sugars)))
 
-(defmacro is [sugar]
-  `(->Is (pattern ~sugar)))
+(defmacro is [fn]
+  `(->Is ~fn))
 
-(defmacro guard [sugar syms form]
-  `(->Guard (pattern ~sugar) ~syms ~form))
+(defmacro guard [sugar fnk]
+  `(->Guard (pattern ~sugar) ~fnk))
 
-(defmacro output [sugar syms form]
-  `(->Output (pattern ~sugar) ~syms ~form))
+(defmacro output [sugar fnk]
+  `(->Output (pattern ~sugar) ~fnk))
 
 (defmacro or [& sugars]
   `(->Or [~@(for [sugar sugars] `(pattern ~sugar))]))
@@ -106,7 +109,7 @@
   (view [1 2 & * 3] [1 2])
   (view [1 2 & * 3] [1 2 3 3 3])
   (view [1 2 & * 3] [1 2 3 3 3 4])
-  (view ~(output [1 2 ^rest & * 3] ['rest] 'rest) [1 2 3 3 3])
+  (view ~(output [1 2 ^rest & * 3] (fnk [rest] rest)) [1 2 3 3 3])
   (pattern ~(or [(->Bind 'succ (->View 'succ)) (->Bind 'zero (->View 'zero))]))
   (macroexpand-1 '(pattern (1 2 3)))
   (macroexpand-1 '(pattern (succ)))

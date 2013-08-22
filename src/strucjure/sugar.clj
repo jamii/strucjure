@@ -5,9 +5,6 @@
             [strucjure.graph :as graph]))
 
 ;; TODO wrapping parser/rest in [] and calling first (elem) is ugly
-;; TODO might want to move all the complicated stuff to sugar.graph in case it gets trampled on by the macros
-;; TODO output-in macro, syntax-quote in guard/output
-;; TODO view! graph!
 
 (defn with-named-nodes [name->pattern]
   (clojure.core/with-meta
@@ -48,7 +45,7 @@
 
 ;; TODO error reporting here
 (defn desugar [name sugar]
-  (let [desugar-view (graph/graph->view (graph/trace (eval (graph/patterns->graph desugar-patterns))) name)]
+  (let [desugar-view (graph/graph->view name (graph/trace (eval (graph/patterns->graph desugar-patterns))))]
     (if-let [[output remaining] (desugar-view sugar)]
       (if (nil? remaining)
         output
@@ -99,6 +96,9 @@
 (defmacro with-meta [sugar meta-sugar]
   `(->WithMeta (pattern ~sugar) (pattern ~meta-sugar)))
 
+(defmacro view! [form]
+  `(->View '~form))
+
 (comment
   (pattern [1 2 & * 3])
   (pattern [1 2 ^x & * 3])
@@ -118,7 +118,7 @@
      num ~(or ~succ ~zero)
      succ (succ ~num)
      zero zero))
-  (def num (graph/graph->view (eval (graph/patterns->graph num-patterns)) 'num))
+  (def num (graph/graph->view 'num (eval (graph/patterns->graph num-patterns))))
   (num 'zero)
   (num '(succ (succ zero)))
   (num '(1 (succ zero)))

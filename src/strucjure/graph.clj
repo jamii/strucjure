@@ -18,7 +18,7 @@
                `(fn [{:syms [~@(keys name->pattern)]}] ~(pattern/pattern->view pattern)))
      {::wrapper identity}))
 
-(defn graph->view [graph name]
+(defn graph->view [name graph]
   (let [vars (for-map [name (keys graph)] name (.. clojure.lang.Var create setDynamic))]
     (doseq [name (keys graph)]
       (alter-var-root (vars name) (constantly ((graph name) vars))))
@@ -83,7 +83,7 @@
                'succ (fnk [x] (inc x))))
   (patterns->graph eg-num-out)
   (def num-graph (eval (patterns->graph eg-num-out)))
-  (def num (graph->view (trace num-graph) 'num))
+  (def num (graph->view 'num (trace num-graph)))
   (num 'zero)
   (num 'foo)
   (num (list 'succ 'zero))

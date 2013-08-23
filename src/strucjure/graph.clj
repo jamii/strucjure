@@ -1,74 +1,57 @@
 (ns strucjure.graph
-  (:require [plumbing.core :refer [fnk for-map aconcat]]
+  (:require [plumbing.core :refer [fnk for-map map-vals aconcat]]
             [strucjure.pattern :as pattern]))
 
 ;; TODO get-in with-deepest-error
 ;; TODO call stack may become a problem
 ;; TODO allow parts of the graph to take args eg bindable in sugar
+;; TODO shouldnt need 30 lines for tracing :(
+;; TODO will later need some way to track dependencies between nodes
 
-(defn output-in [name->pattern & names&fnks]
-  (apply assoc name->pattern
+(defn with-binding [graph var val]
+  (vary-meta graph clojure.core/update-in [::bindings] #(assoc % var val)))
+
+(defn output-in [graph & names&fnks]
+  (apply assoc graph
          (aconcat (for [[name fnk] (partition 2 names&fnks)]
-                    [name (pattern/->Output (name->pattern name) fnk)]))))
-
-(defn patterns->graph [name->pattern]
-  `(with-meta
-     ~(for-map [[name pattern] name->pattern]
-               `'~name
-               `(fn [{:syms [~@(keys name->pattern)]}] ~(pattern/pattern->view pattern)))
-     {::wrapper identity}))
+                    [name (pattern/->Output (graph name) fnk)]))))
 
 (defn graph->view [name graph]
-  (let [vars (for-map [name (keys graph)] name (.. clojure.lang.Var create setDynamic))]
-    (doseq [name (keys graph)]
-      (alter-var-root (vars name) (constantly ((graph name) vars))))
-    ((::wrapper (meta graph)) (var-get (vars name)))))
+  `(letfn [~@(for [[name pattern] graph] (pattern->view name pattern))]
+     (fn [input#]
+       (binding [~@(aconcat (::bindings (meta graph)))]
+         (~name input#)))))
 
-(defn update-in [graph & names&fs]
-  (apply assoc graph
-         (aconcat (for [[name f] (partition 2 names&fs)]
-                   [name (fn [vars] (f ((get graph name) vars)))]))))
+(defrecord Trace [pattern name enter-fn exit-fn]
+  strucjure.pattern.IPattern
+  (pattern->clj [this input output? state result->body]
+    `(let [~'_ (~enter-fn '~name ~input)
+           result# ~(pattern/*pattern->clj* pattern input output? state result->body)
+           ~'_ (~exit-fn '~name result#)]
+       result#)))
 
-(defn update-all [graph f]
-  (with-meta
-    (for-map [[name node] graph] name (fn [vars] (f name (node vars))))
-    (meta graph)))
+(defn with-trace [graph enter-fn exit-fn]
+  (with-meta (for-map [[name pattern] graph] name (->Trace pattern name enter-fn exit-fn)) (meta graph)))
 
-(defn with-wrapper [graph wrapper]
-  (vary-meta graph clojure.core/update-in [::wrapper] #(comp wrapper %)))
-
-(defn with-binding [graph var init-val]
-  (with-wrapper graph
-    (fn [view]
-      (fn [input]
-        (push-thread-bindings {var init-val})
-        (try
-          (view input)
-          (finally (pop-thread-bindings)))))))
-
-(defn with-depth [graph on-input on-result]
-  (let [depth (.. clojure.lang.Var create setDynamic)]
-    (update-all (with-binding graph depth 0)
-                (fn [name view]
-                  (fn [input]
-                    (on-input (var-get depth) name input)
-                    (var-set depth (inc (var-get depth)))
-                    (let [result (view input)]
-                      (var-set depth (dec (var-get depth)))
-                      (on-result (var-get depth) name result)
-                      result))))))
+(def ^:dynamic *depth*)
 
 (defn- indent [n]
   (apply str (repeat (* 4 n) \ )))
 
-(defn trace [graph]
-  (with-depth graph
-    (fn [depth name input]
-      (println (str (indent depth) "=>") name input))
-    (fn [depth name result]
-      (if result
-        (println (str (indent depth) "<=") name result)
-        (println (str (indent depth) "X ") name)))))
+(defn print-enter [name input]
+  (println (indent *depth*) "=>" name input)
+  (set! *depth* (inc *depth*))
+  input)
+
+(defn print-exit [name result]
+  (set! *depth* (dec *depth*))
+  (if result
+    (println (indent *depth*) "<=" name result)
+    (println (indent *depth*) "X" name))
+  result)
+
+(defn with-print-trace [graph]
+  (-> graph (with-binding `*depth* 0) (with-trace print-enter print-exit)))
 
 (comment
   (use 'strucjure.pattern 'clojure.pprint 'clojure.stacktrace)
@@ -81,9 +64,7 @@
     (output-in eg-num
                'zero (fnk [] 0)
                'succ (fnk [x] (inc x))))
-  (patterns->graph eg-num-out)
-  (def num-graph (eval (patterns->graph eg-num-out)))
-  (def num (graph->view 'num (trace num-graph)))
+  (def num (eval (graph->view 'num (with-print-trace eg-num-out))))
   (num 'zero)
   (num 'foo)
   (num (list 'succ 'zero))

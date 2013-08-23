@@ -11,7 +11,7 @@
     (for-map [[name pattern] name->pattern] name (->Bind name pattern))
     (meta name->pattern)))
 
-(def sugar-patterns ;D
+(def sugar-graph ;D
   (letfn [(view [sym] (->Bind sym (->View sym)))
           (bindable [pattern] (->WithMeta pattern (->Or [{:tag (->Or [(view 'binding) (->Bind 'binding nil)])} (->Bind 'binding nil)])))]
     {'pattern (bindable (->Or [(view 'unquote) (view 'seq) (view 'vec) (view 'map) (view 'any) (view 'default)]))
@@ -30,8 +30,8 @@
 (def prefixes
   {'* 'pattern/->ZeroOrMore})
 
-(def desugar-patterns
-  (graph/output-in (with-named-nodes sugar-patterns)
+(def desugar-graph
+  (graph/output-in (with-named-nodes sugar-graph)
                    'pattern (fnk [binding pattern] (if binding `(->Bind '~binding ~pattern) pattern))
                    'unquote (fnk [unquoted] unquoted)
                    'seq (fnk [seq] `(list ~@seq))
@@ -45,8 +45,9 @@
                    'default (fnk [default] `'~default)))
 
 ;; TODO error reporting here
+;; TODO dont eval each time
 (defn desugar [name sugar]
-  (let [desugar-view (graph/graph->view name (graph/trace (eval (graph/patterns->graph desugar-patterns))))]
+  (let [desugar-view (eval (graph/graph->view name (graph/with-print-trace desugar-graph)))]
     (if-let [[output remaining] (desugar-view sugar)]
       (if (nil? remaining)
         output
@@ -63,7 +64,7 @@
      (pattern/*pattern->clj* (eval (desugar 'pattern sugar)) input true {}
                              (fn [output remaining _] [output remaining]))))
 
-(defmacro patterns [& names&sugars]
+(defmacro graph [& names&sugars]
   (let [name->sugar (for-map [[name sugar] (partition 2 names&sugars)] name sugar)]
     `(let [~@(aconcat (for [[name _] name->sugar] [name `(->Bind '~name (->View '~name))]))]
        ~(for-map [[name sugar] name->sugar] `'~name `(->Bind '~name (pattern ~sugar))))))
@@ -96,7 +97,10 @@
   `(->WithMeta (pattern ~sugar) (pattern ~meta-sugar)))
 
 (comment
-  (pattern [1 2 & * 3])
+  (use 'clojure.stacktrace)
+  (e)
+  ((eval (graph/graph->view 'pattern desugar-graph)) '[1 2 & * 3])
+  (macroexpand-1 '(pattern [1 2 & * 3]))
   (pattern [1 2 ^x & * 3])
   (pattern [1 2 & ^x * 3])
   (pattern {:foo 1 :bar (& * 3)})
@@ -109,12 +113,12 @@
   (pattern ~(or [(->Bind 'succ (->View 'succ)) (->Bind 'zero (->View 'zero))]))
   (macroexpand-1 '(pattern (1 2 3)))
   (macroexpand-1 '(pattern (succ)))
-  (def num-patterns
-    (patterns
+  (def num-graph
+    (graph
      num ~(or ~succ ~zero)
      succ (succ ~num)
      zero zero))
-  (def num (graph/graph->view 'num (eval (graph/patterns->graph num-patterns))))
+  (def num (eval (graph/graph->view 'num num-graph)))
   (num 'zero)
   (num '(succ (succ zero)))
   (num '(1 (succ zero)))

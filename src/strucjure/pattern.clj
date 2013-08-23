@@ -237,10 +237,13 @@
       `(when-let [[~view-output ~view-remaining] (~form ~input)]
          ~(result->body view-output view-remaining state)))))
 
-(defn pattern->view [pattern]
-  (with-syms [input]
-    `(fn [~input]
-       ~(*pattern->clj* pattern input true {} (fn [output remaining _] [output remaining])))))
+(defn pattern->view
+  ([pattern]
+     (pattern->view 'fn pattern))
+  ([name pattern]
+      (with-syms [input]
+        `(~name [~input]
+           ~(*pattern->clj* pattern input true {} (fn [output remaining _] [output remaining]))))))
 
 (comment
   (use 'clojure.stacktrace)

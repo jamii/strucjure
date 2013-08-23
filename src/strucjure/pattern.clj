@@ -147,6 +147,7 @@
 (defrecord Bind [symbol pattern]
   IPattern
   (pattern->clj [this input output? state result->body]
+    (assert (symbol? symbol))
     (if (= :free (state symbol))
       (*pattern->clj* pattern input true
                       (assoc state symbol :bound)
@@ -244,43 +245,3 @@
       (with-syms [input]
         `(~name [~input]
            ~(*pattern->clj* pattern input true {} (fn [output remaining _] [output remaining]))))))
-
-(comment
-  (use 'clojure.stacktrace)
-  (e)
-  (pattern->view (->Bind 1 'a))
-  (pattern->view (->Output (->Bind 1 'a) '(+ a 1)))
-  (pattern->view (list 1 2))
-  ((eval (pattern->view (list 1 2))) (list 1 2))
-  ((eval (pattern->view (list 1 2))) (list 1))
-  ((eval (pattern->view (list 1 2))) (list 1 2 3))
-  ((eval (pattern->view (list 1 2))) (list 1 3))
-  ((eval (pattern->view (list 1 2))) [1 2])
-  ((eval (pattern->view (list 1 2))) 1)
-  (let [a (eval (pattern->view 1))] (pattern->view (list (->View a) 2)))
-  (let [a (eval (pattern->view 1))] ((eval (pattern->view (list (->View a) 2))) (list 1 2 3)))
-  ((eval (pattern->view (list))) (list))
-  ((eval (pattern->view (list))) (list 1 2))
-  ((eval (pattern->view (list))) nil)
-  ((eval (pattern->view (->ZeroOrMore 1))) (list))
-  ((eval (pattern->view (->ZeroOrMore 1))) (list 2))
-  ((eval (pattern->view (->ZeroOrMore 1))) (list 1 1))
-  ((eval (pattern->view (->ZeroOrMore 1))) (list 1 1 2))
-  ((eval (pattern->view (->ZeroOrMore (->Or [1 2])))) (list 1 2 1 2 3))
-  ((eval (pattern->view (->ZeroOrMore (->Rest (list 1))))) (list 1 1 1))
-  (pattern->view (->ZeroOrMore 1))
-  (pattern->view (->Output (->ZeroOrMore 1) ''ones))
-  (pattern->view (->Output (->Bind (->ZeroOrMore 1) 'a) 'a))
-  (let [[out rem] ((eval (pattern->view (->WithMeta (->Any) {:foo true}))) ^:foo [])]
-    (meta out))
-  ((eval (pattern->view [1 2])) [1])
-  ((eval (pattern->view [1 2])) [1 2])
-  ((eval (pattern->view [1 2])) [1 2 3])
-  ((eval (pattern->view [1 2])) [1 3])
-  ((eval (pattern->view (list (->Rest (->Bind 'elems (->ZeroOrMore (->Rest (->Any)))))))) (list 1 2 3))
-  ((eval (pattern->view (->Seqable [(->Rest (->ZeroOrMore [(->Any) (->Any)]))]))) '{:foo 1 :bar (& * 3)})
-  ((eval (pattern->view (->And [{} (->Bind 'elems (->Seqable [(->Rest (->ZeroOrMore [(->Any) (->Any)]))]))]))) '{:foo 1 :bar (& * 3)})
-  ((eval (pattern->view [(->Any) (->Any)])) (first (seq '{:foo 1 :bar (& * 3)})))
-  (eval (pattern->view (->Output (list (->WithMeta (->Bind 'prefix (->Or ['*])) (->Any)) (->Rest (->View 'inc))) 'prefix)))
-  ((eval (pattern->view (->Output (->Bind 'a (list 1 (->Bind 'a 2))) (fnk [a] a)))) (list 1 2))
-  )

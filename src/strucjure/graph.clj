@@ -16,8 +16,13 @@
          (aconcat (for [[name fnk] (partition 2 names&fnks)]
                     [name (pattern/->Output (graph name) fnk)]))))
 
+(defn with-named-nodes [graph]
+  (with-meta
+    (for-map [[name pattern] graph] name (pattern/->Bind name pattern))
+    (meta graph)))
+
 (defn graph->view [name graph]
-  `(letfn [~@(for [[name pattern] graph] (pattern->view name pattern))]
+  `(letfn [~@(for [[name pattern] graph] (pattern/pattern->view name pattern))]
      (fn [input#]
        (binding [~@(aconcat (::bindings (meta graph)))]
          (~name input#)))))
@@ -31,7 +36,9 @@
        result#)))
 
 (defn with-trace [graph enter-fn exit-fn]
-  (with-meta (for-map [[name pattern] graph] name (->Trace pattern name enter-fn exit-fn)) (meta graph)))
+  (with-meta
+    (for-map [[name pattern] graph] name (->Trace pattern name enter-fn exit-fn))
+    (meta graph)))
 
 (def ^:dynamic *depth*)
 
@@ -52,22 +59,3 @@
 
 (defn with-print-trace [graph]
   (-> graph (with-binding `*depth* 0) (with-trace print-enter print-exit)))
-
-(comment
-  (use 'strucjure.pattern 'clojure.pprint 'clojure.stacktrace)
-  (e)
-  (def eg-num
-    {'num (->Or [(->View 'zero) (->View 'succ)])
-     'zero 'zero
-     'succ (list 'succ (->Bind 'x (->View 'num)))})
-  (def eg-num-out
-    (output-in eg-num
-               'zero (fnk [] 0)
-               'succ (fnk [x] (inc x))))
-  (def num (eval (graph->view 'num (with-print-trace eg-num-out))))
-  (num 'zero)
-  (num 'foo)
-  (num (list 'succ 'zero))
-  (num (list 'succ (list 'succ 'zero)))
-  (num (list 'succ (list 'succ 'succ)))
-  )

@@ -1,13 +1,9 @@
 (ns strucjure)
 
 ;; --- TODO ---
-;; need to be careful about reusing input - a (let-sym [input `(meta input)] ...) would be useful here
-;;      let-syms -> with-syms, then use let-sym
-;; go back to using letfn for graph, along with pre/post
 ;; error reporting - deepest-error in graph, maybe first-error in pattern
 ;; debugging - trace-pattern, trace-graph
-;; let input in patterns
-;; tests (regression, readme, bootstrap, generative)
+;; tests (readme, bootstrap, generative)
 ;; README
 
 ;; --- ERRORS ---
@@ -20,7 +16,7 @@
 ;; check if output unchanged in patterns - maybe rethink how output/bindings are passed
 
 ;; --- LATER ---
-;; figure out how to roundtrip pre/post closures through eval
+;; figure out how to roundtrip closures through eval
 ;; need to be able to alter views (store original pattern in meta and have pattern/alter and graph/alter)
 ;; need to be able to walk patterns for eg determining dependencies in graph so can ignore in lenses
 ;; cut by returning delay - can trampoline to the nearest try - needs work inside Or/ZeroOrMore

@@ -38,7 +38,6 @@
   (deftest regression
     (let [tests (read-all tests-file)
           results (line-seq (clojure.java.io/reader results-file))]
-      (is (= (count tests) (count results)) "Use (reset-results) if some results are missing")
-      (binding [*ns* this-ns]
-        (doseq [[test result] (map vector tests results)]
-          (is (= (eval-test test) result) test))))))
+      (doseq [[test result] (map vector tests results)]
+        (is (= (eval-test test) result) test))
+      (is (= (count tests) (count results)) "Should usually have the same number of tests and results - may want to (reset-results)"))))

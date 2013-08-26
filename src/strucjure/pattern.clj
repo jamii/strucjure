@@ -10,7 +10,6 @@
 ;; TODO need a general way to indicate that output is unchanged for eg WithMeta
 ;;      just check (= input output)?
 ;; TODO think carefully about seq vs list
-;; TODO might have to rething Rest - is frequently ugly eg in sugar
 ;; TODO could return to having implicit equality but would require careful thinking about Guard/Output
 ;;      state needs to track 'has it been bound before' and 'will it need to be bound again' - not exclusive
 ;; TODO should View take a fn instead of a form? where do we want to eval it?
@@ -23,13 +22,6 @@
      state -- {symbol :bound/:free}, :bound symbols are in scope already, :free symbols are used somewhere in the body
      result->body -- (fn [output remaining] form), returns the body to be evaluated on success, should be called *exactly* once"))
 
-;; --- REST ---
-
-(defrecord Rest [pattern]
-  IPattern
-  (pattern->clj [this input output? state result->body]
-    (throw (Exception. (pr-str "Compiling strucjure.pattern.Rest outside of seq: " this)))))
-
 (defn ^:dynamic *pattern->clj* [this input output? state result->body]
   (if (symbol? input)
     (pattern->clj this input output? state result->body)
@@ -37,9 +29,17 @@
       `(let [~input-sym ~input]
          ~(pattern->clj this input-sym output? state result->body)))))
 
+;; --- REST ---
+
+(defn ->Rest [pattern]
+  (vary-meta pattern assoc ::rest true))
+
+(defn rest? [pattern]
+  (::rest (meta pattern)))
+
 (defn head->clj [pattern input output? state result->body]
-  (if (instance? Rest pattern)
-    (*pattern->clj* (:pattern pattern) input output? state result->body)
+  (if (rest? pattern)
+    (*pattern->clj* pattern input output? state result->body)
     `(when ~input
        ~(*pattern->clj* pattern `(first ~input) output? state
                         (fn [output remaining state]
@@ -47,12 +47,12 @@
                                     (result->body output `(next ~input) state)))))))
 
 (defn cons->clj [pattern first rest]
-  (if (instance? Rest pattern)
+  (if (rest? pattern)
     `(concat ~first ~rest)
     `(cons ~first ~rest)))
 
 (defn conj->clj [pattern last rest]
-  (if (instance? Rest pattern)
+  (if (rest? pattern)
     `(apply conj ~rest ~last)
     `(conj ~rest ~last)))
 
@@ -103,7 +103,7 @@
   clojure.lang.IPersistentVector
   (pattern->clj [this input output? state result->body]
     `(when (vector? ~input)
-       ~(if (some #(instance? Rest %) this)
+       ~(if (some rest? this)
           (seq->clj this `(seq ~input) output? state
                     (fn [output remaining state] (result->body `(vec ~output) remaining state)))
           `(when (>= (count ~input) ~(count this))

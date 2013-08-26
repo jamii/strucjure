@@ -42,16 +42,16 @@ nil
 [2 nil]
 nil
 [(quote 1) (quote 2) (strucjure.pattern/->Rest (strucjure.pattern/->ZeroOrMore (quote 3)))]
-[1 2 #strucjure.pattern.Rest{:pattern #strucjure.pattern.ZeroOrMore{:pattern 3}}]
-[1 2 #strucjure.pattern.Rest{:pattern #strucjure.pattern.Bind{:symbol x, :pattern #strucjure.pattern.ZeroOrMore{:pattern 3}}}]
-[1 2 #strucjure.pattern.Rest{:pattern #strucjure.pattern.Bind{:symbol x, :pattern #strucjure.pattern.ZeroOrMore{:pattern 3}}}]
-{:foo 1, :bar (#strucjure.pattern.Rest{:pattern #strucjure.pattern.ZeroOrMore{:pattern 3}})}
+[1 2 #strucjure.pattern.ZeroOrMore{:pattern 3}]
+[1 2 #strucjure.pattern.Bind{:symbol x, :pattern #strucjure.pattern.ZeroOrMore{:pattern 3}}]
+[1 2 #strucjure.pattern.Bind{:symbol x, :pattern #strucjure.pattern.ZeroOrMore{:pattern 3}}]
+{:foo 1, :bar (#strucjure.pattern.ZeroOrMore{:pattern 3})}
 [1 2 #strucjure.pattern.Or{:patterns [3 4]}]
 [1 2 #strucjure.pattern.Bind{:symbol x, :pattern #strucjure.pattern.View{:form foo}}]
 [[1 2] nil]
 [[1 2 3 3 3] nil]
 [[1 2 3 3 3] (4)]
-[(3 3 3) nil]
+nil
 #strucjure.pattern.Or{:patterns [[(->Bind (quote succ) (->View (quote succ))) (->Bind (quote zero) (->View (quote zero)))]]}
 (clojure.core/list (quote 1) (quote 2) (quote 3))
 (clojure.core/list (quote succ))

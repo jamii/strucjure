@@ -15,16 +15,16 @@
      'seq (list (->Rest (view 'elems)))
      'vec (vector (->Rest (view 'elems)))
      'elems (->ZeroOrMore (->Rest (view 'elem)))
-     'elem (->Or [(view 'parser) (view 'rest) (list (view 'pattern))])
-     'parser (list (bindable (->Bind 'prefix (->Or ['*]))) (->Rest (view 'elem))) ;; TODO + ?
-     'rest (list (bindable '&) (->Rest (view 'elem)))
+     'elem (->Or [(view 'parser) (list (view 'pattern))])
+     'parser (list (bindable (->Bind 'prefix (->Or ['* '&]))) (->Rest (view 'elem))) ;; TODO + ?
      'map (->And [{} (->Bind 'elems (->Seqable [(->Rest (->ZeroOrMore [(->Any) (view 'pattern)]))]))]) ;; TODO make s/hashmap for this pattern
      'binding (->Is #(symbol? %))
      'any '_
      'default (->Any)}))
 
 (def prefixes
-  {'* 'strucjure.pattern/->ZeroOrMore})
+  {'* 'strucjure.pattern/->ZeroOrMore
+   '& 'strucjure.pattern/->Rest})
 
 (def desugar-graph
   (graph/output-in (graph/with-named-nodes sugar-graph)
@@ -34,8 +34,6 @@
                    'parser (fnk [binding prefix elem]
                                 [(let [parser `(~(prefixes prefix) ~(first elem))]
                                    (if binding `(->Bind '~binding ~parser) parser))])
-                   'rest (fnk [binding elem]
-                              [`(strucjure.pattern/->Rest ~(if binding `(->Bind '~binding ~(first elem)) (first elem)))])
                    'map (fnk [map] (into {} map))
                    'any (fnk [] `(strucjure.pattern/->Any))
                    'default (fnk [default] `'~default)))

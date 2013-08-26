@@ -4,18 +4,31 @@
 ;; error reporting - deepest-error in graph, maybe first-error in pattern
 ;; debugging - trace-pattern, trace-graph
 ;; tests (readme, bootstrap, generative)
-;; README
+;; README - http://hugoduncan.org/post/evaluate_clojure_in_emacs_markdown_buffers/
 
 ;; --- ERRORS ---
 ;; maybe need to rethink [o r] vs nil
 ;; need to return failure messages
 ;; can they be tracked imperatively?
 ;; later on, cut and commit will require modifying (when-let [[o r] ...] ...)
+;; proposal
+;;   use Success and Fail
+;;   if-result, when-result, check
+;;   rename state->scope, output?->control. track :output, :trace, :depth
+;;   pass error? to decide whether or not to bother constructing a real Fail
+;;     we always have to insert depth, at least
+;;   allow graph to choose heuristic for tracking failures
+;;  what if we pass in a mutable var to use for error tracking
+;;    it needs depth and result
+;;    could walk and wrap every Or? and every when? nope, gonna have to be hardcoded
+;;  for now stick with the current scheme and focus on tracing
 
-;; --- OPTIMISTIONS ---
+;; --- OPTIMISATIONS ---
 ;; check if output unchanged in patterns - maybe rethink how output/bindings are passed
+;; should Output check output?
 
 ;; --- LATER ---
+;; use tuple or deftype for result?
 ;; figure out how to roundtrip closures through eval
 ;; need to be able to alter views (store original pattern in meta and have pattern/alter and graph/alter)
 ;; need to be able to walk patterns for eg determining dependencies in graph so can ignore in lenses
@@ -40,6 +53,7 @@
 ;; write the api without macros first
 ;; would be hugely useful to be able to embed arbitrary data structures in code before eval
 ;; getting binding right is hard. parsec et al solve this by just not doing it
+;; write down thinking to avoid going in circles
 
 ;; --- MOTIVATION ---
 ;; types vs data

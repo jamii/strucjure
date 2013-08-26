@@ -3,16 +3,7 @@
             clojure.walk
             [plumbing.core :refer [map-vals]]))
 
-(def tests-file "./test/strucjure/regression/tests.clj")
 (def results-file "./test/strucjure/regression/results.clj")
-
-(defn read-all [filename]
-  (with-open [reader (java.io.PushbackReader. (clojure.java.io/reader filename))]
-    (loop [acc []]
-      (let [form (read reader false ::eof)]
-        (if (= ::eof form)
-          acc
-          (recur (conj acc form)))))))
 
 (defn repeatable* [form]
   (cond
@@ -30,13 +21,13 @@
     (pr-str (repeatable (eval test)))))
 
 (defn reset-results []
-  (spit results-file (clojure.string/join "\n" (map eval-test (read-all tests-file)))))
+  (spit results-file (clojure.string/join "\n" (map eval-test strucjure.regression.tests/tests))))
 
 ;; (reset-results)
 
 (let [this-ns *ns*]
   (deftest regression
-    (let [tests (read-all tests-file)
+    (let [tests strucjure.regression.tests/tests
           results (line-seq (clojure.java.io/reader results-file))]
       (doseq [[test result] (map vector tests results)]
         (is (= (eval-test test) result) test))

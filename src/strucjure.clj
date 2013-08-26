@@ -31,7 +31,6 @@
 ;; use tuple or deftype for result?
 ;; figure out how to roundtrip closures through eval
 ;; need to be able to alter views (store original pattern in meta and have pattern/alter and graph/alter)
-;; need to be able to walk patterns for eg determining dependencies in graph so can ignore in lenses
 ;; cut by returning delay - can trampoline to the nearest try - needs work inside Or/ZeroOrMore
 ;; gens
 ;; type hinting

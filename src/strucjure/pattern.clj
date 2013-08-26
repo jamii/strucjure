@@ -1,6 +1,6 @@
 (ns strucjure.pattern
   (:require [clojure.set :refer [union]]
-            [plumbing.core :refer [fnk]]
+            [plumbing.core :refer [map-vals fnk]]
             [strucjure.util :refer [when-nil with-syms fnk->clj]]))
 
 ;; TODO Record
@@ -15,6 +15,8 @@
 ;; TODO should View take a fn instead of a form? where do we want to eval it?
 
 (defprotocol IPattern
+  (fmap [this f]
+    "Apply f to all immediate child patterns")
   (pattern->clj [this input output? state result->body]
     "Compile a pattern into clojure which returns nil on failure or hands control to result->body on success.
      input -- form, input to the pattern
@@ -28,6 +30,11 @@
     (with-syms [input-sym]
       `(let [~input-sym ~input]
          ~(pattern->clj this input-sym output? state result->body)))))
+
+(defn postwalk [pattern f]
+  (let [inner (fmap pattern #(postwalk % f))
+        mid (if (meta pattern) (with-meta inner (meta pattern)) inner)]
+    (f mid)))
 
 ;; --- REST ---
 
@@ -89,18 +96,26 @@
 
 (extend-protocol IPattern
   nil
+  (fmap [this f]
+    this)
   (pattern->clj [this input output? state result->body]
     `(when (nil? ~input)
        ~(result->body nil nil state)))
   Object
+  (fmap [this f]
+    this)
   (pattern->clj [this input output? state result->body]
     `(when (= ~input '~this)
        ~(result->body input nil state)))
   clojure.lang.ISeq
+  (fmap [this f]
+    (map f this))
   (pattern->clj [this input output? state result->body]
     `(when (seq? ~input)
        ~(seq->clj this `(seq ~input) output? state result->body)))
   clojure.lang.IPersistentVector
+  (fmap [this f]
+    (vec (map f this)))
   (pattern->clj [this input output? state result->body]
     `(when (vector? ~input)
        ~(if (some rest? this)
@@ -109,12 +124,16 @@
           `(when (>= (count ~input) ~(count this))
              ~(vec->clj this 0 input output? state result->body)))))
   clojure.lang.IPersistentMap
+  (fmap [this f]
+    (map-vals f this))
   (pattern->clj [this input output? state result->body]
     `(when (instance? clojure.lang.IPersistentMap ~input)
        ~(map->clj this input output? state result->body))))
 
 (defrecord Seqable [patterns]
   IPattern
+  (fmap [this f]
+    (->Seqable (map f this)))
   (pattern->clj [this input output? state result->body]
     `(when (instance? clojure.lang.Seqable ~input)
        ~(seq->clj patterns `(seq ~input) output? state result->body))))
@@ -123,17 +142,23 @@
 
 (defrecord Any []
   IPattern
+  (fmap [this f]
+    this)
   (pattern->clj [this input output? state result->body]
     (result->body input nil state)))
 
 (defrecord Is [f]
   IPattern
+  (fmap [this f]
+    this)
   (pattern->clj [this input output? state result->body]
     `(when (~f ~input)
        ~(result->body input nil state))))
 
 (defrecord Guard [pattern fnk]
   IPattern
+  (fmap [this f]
+    (->Guard (f pattern) fnk))
   (pattern->clj [this input output? state result->body]
     (let [[args call] (fnk->clj fnk)]
       (*pattern->clj* pattern input output?
@@ -146,6 +171,8 @@
 
 (defrecord Bind [symbol pattern]
   IPattern
+  (fmap [this f]
+    (->Bind symbol (f pattern)))
   (pattern->clj [this input output? state result->body]
     (assert (symbol? symbol))
     (if (= :free (state symbol))
@@ -158,6 +185,8 @@
 
 (defrecord Output [pattern fnk]
   IPattern
+  (fmap [this f]
+    (->Output (f pattern) fnk))
   (pattern->clj [this input output? state result->body]
     (let [[args call] (fnk->clj fnk)]
       (*pattern->clj* (->Bind '&output pattern) input false
@@ -175,6 +204,8 @@
 
 (defrecord Or [patterns]
   IPattern
+  (fmap [this f]
+    (->Or (map f patterns)))
   (pattern->clj [this input output? state result->body]
     (assert patterns (pr-str "Or cannot be empty: " this))
     (let [states (atom #{})
@@ -192,6 +223,8 @@
 
 (defrecord And [patterns]
   IPattern
+  (fmap [this f]
+    (->And (map f patterns)))
   (pattern->clj [this input output? state result->body]
     (assert patterns (pr-str "And cannot be empty: " this))
     (let [[first-pattern & rest-pattern] (seq patterns)]
@@ -202,6 +235,8 @@
 
 (defrecord ZeroOrMore [pattern]
   IPattern
+  (fmap [this f]
+    (->ZeroOrMore (f pattern)))
   (pattern->clj [this input output? state result->body]
     (with-syms [loop-output loop-remaining output remaining]
       (let [binding (if output? [output remaining] [remaining])
@@ -221,6 +256,8 @@
 
 (defrecord WithMeta [pattern meta-pattern]
   IPattern
+  (fmap [this f]
+    (->WithMeta (f pattern) (f meta-pattern)))
   (pattern->clj [this input output? state result->body]
     (*pattern->clj* pattern input output? state
                     (fn [output remaining state]
@@ -233,6 +270,8 @@
 
 (defrecord View [form]
   IPattern
+  (fmap [this f]
+    this)
   (pattern->clj [this input output? state result->body]
     (with-syms [view-output view-remaining]
       `(when-let [[~view-output ~view-remaining] (~form ~input)]

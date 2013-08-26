@@ -1,6 +1,6 @@
 (ns strucjure.pattern
   (:require [clojure.set :refer [union]]
-            [plumbing.core :refer [map-vals fnk]]
+            [plumbing.core :refer [aconcat map-vals fnk]]
             [strucjure.util :refer [when-nil with-syms fnk->clj]]))
 
 ;; TODO Record
@@ -16,7 +16,7 @@
 
 (defprotocol IPattern
   (fmap [this f]
-    "Apply f to all immediate child patterns")
+    "Apply f to all immediate child patterns. Does not need to keep metadata.")
   (pattern->clj [this input output? state result->body]
     "Compile a pattern into clojure which returns nil on failure or hands control to result->body on success.
      input -- form, input to the pattern
@@ -31,10 +31,8 @@
       `(let [~input-sym ~input]
          ~(pattern->clj this input-sym output? state result->body)))))
 
-(defn postwalk [pattern f]
-  (let [inner (fmap pattern #(postwalk % f))
-        mid (if (meta pattern) (with-meta inner (meta pattern)) inner)]
-    (f mid)))
+(defn with-binding [pattern var val]
+  (vary-meta pattern clojure.core/update-in [::bindings] #(assoc % var val)))
 
 ;; --- REST ---
 
@@ -283,4 +281,5 @@
   ([name pattern]
       (with-syms [input]
         `(~name [~input]
-           ~(*pattern->clj* pattern input true {} (fn [output remaining _] [output remaining]))))))
+                (binding [~@(aconcat (::bindings (meta pattern)))]
+                  ~(*pattern->clj* pattern input true {} (fn [output remaining _] [output remaining])))))))

@@ -1,10 +1,11 @@
 (ns strucjure)
 
 ;; --- TODO ---
+;; trace behaves a bit weirdly for patterns - maybe need an output-fn in ->Trace
+;; with-binding in pattern is fragile (also a bad name...) could maybe replace with ->Binding and rename ->Bind to ->Let
+;; tests (string in regression, readme, bootstrap, generative)
 ;; error reporting - deepest-error in graph, maybe first-error in pattern
-;; debugging - trace-pattern, trace-graph
-;; tests (readme, bootstrap, generative)
-;; README - http://hugoduncan.org/post/evaluate_clojure_in_emacs_markdown_buffers/
+;; README - http://hugoduncan.org/post/evaluate_clojure_in_emacs_markdown_buffers/ or similar
 
 ;; --- ERRORS ---
 ;; maybe need to rethink [o r] vs nil

@@ -3,11 +3,12 @@
   (:require [plumbing.core :refer [fnk for-map aconcat]]
             [strucjure.util :refer [with-syms]]
             [strucjure.pattern :as pattern :refer [->Rest ->Seqable ->Any ->Is ->Guard ->Bind ->Output ->Or ->And ->ZeroOrMore ->WithMeta ->View]]
+            [strucjure.debug :as debug]
             [strucjure.graph :as graph]))
 
 ;; TODO wrapping parser/rest in [] and calling first (elem) is ugly
 
-(def sugar-graph ;D
+(def sugared
   (letfn [(view [sym] (->Bind sym (->View sym)))
           (bindable [pattern] (->WithMeta pattern (->Or [{:tag (->Or [(view 'binding) (->Bind 'binding nil)])} (->Bind 'binding nil)])))]
     {'pattern (bindable (->Or [(view 'unquote) (view 'seq) (view 'vec) (view 'map) (view 'any) (view 'default)]))
@@ -15,33 +16,35 @@
      'seq (list (->Rest (view 'elems)))
      'vec (vector (->Rest (view 'elems)))
      'elems (->ZeroOrMore (->Rest (view 'elem)))
-     'elem (->Or [(view 'parser) (list (view 'pattern))])
-     'parser (list (bindable (->Bind 'prefix (->Or ['* '&]))) (->Rest (view 'elem))) ;; TODO + ?
+     'elem (->Or [(view 'parser) (view 'rest) (list (view 'pattern))])
+     'parser (list (bindable (->Bind 'prefix (->Or ['*]))) (->Rest (view 'elem))) ;; TODO + ?
+     'rest (list (bindable (->Bind 'prefix '&)) (->Rest (view 'elem)))
      'map (->And [{} (->Bind 'elems (->Seqable [(->Rest (->ZeroOrMore [(->Any) (view 'pattern)]))]))]) ;; TODO make s/hashmap for this pattern
      'binding (->Is #(symbol? %))
      'any '_
      'default (->Any)}))
 
 (def prefixes
-  {'* 'strucjure.pattern/->ZeroOrMore
-   '& 'strucjure.pattern/->Rest})
+  {'* 'strucjure.pattern/->ZeroOrMore})
 
-(def desugar-graph
-  (graph/output-in (graph/with-named-nodes sugar-graph)
+(def desugared
+  (graph/output-in (graph/with-named-nodes sugared)
                    'pattern (fnk [binding pattern] (if binding `(->Bind '~binding ~pattern) pattern))
                    'unquote (fnk [unquoted] unquoted)
                    'seq (fnk [seq] `(list ~@seq))
                    'parser (fnk [binding prefix elem]
                                 [(let [parser `(~(prefixes prefix) ~(first elem))]
                                    (if binding `(->Bind '~binding ~parser) parser))])
+                   'rest (fnk [binding elem]
+                              [`(->Rest ~(if binding `(->Bind '~binding ~(first elem)) (first elem)))])
                    'map (fnk [map] (into {} map))
                    'any (fnk [] `(strucjure.pattern/->Any))
                    'default (fnk [default] `'~default)))
 
 ;; TODO error reporting here
 ;; TODO dont eval each time
-(defn desugar [name sugar]
-  (let [desugar-view (eval (graph/graph->view name desugar-graph))]
+(defn desugar-pattern [sugar]
+  (let [desugar-view (eval (graph/graph->view 'pattern desugared))]
     (if-let [[output remaining] (desugar-view sugar)]
       (if (nil? remaining)
         output
@@ -49,19 +52,15 @@
       (throw (Exception. "Not a pattern")))))
 
 (defmacro pattern [sugar]
-  (desugar 'pattern sugar))
+  (desugar-pattern sugar))
 
-(defmacro view
-  ([sugar]
-     (pattern/pattern->view (eval (desugar 'pattern sugar))))
-  ([sugar input]
-     (pattern/*pattern->clj* (eval (desugar 'pattern sugar)) input true {}
-                             (fn [output remaining _] [output remaining]))))
+(defn desugar-graph [name->sugar]
+  `(let [~@(aconcat (for [name (keys name->sugar)] [name `(->Bind '~name (->View '~name))]))]
+     (strucjure.graph/with-named-nodes
+       ~(for-map [[name sugar] name->sugar] `'~name `(pattern ~sugar)))))
 
 (defmacro graph [& names&sugars]
-  (let [name->sugar (for-map [[name sugar] (partition 2 names&sugars)] name sugar)]
-    `(let [~@(aconcat (for [[name _] name->sugar] [name `(->Bind '~name (->View '~name))]))]
-       ~(for-map [[name sugar] name->sugar] `'~name `(->Bind '~name (pattern ~sugar))))))
+  (desugar-graph (for-map [[name sugar] (partition 2 names&sugars)] name sugar)))
 
 (defmacro seqable [& sugars]
   `(->Seqable (pattern ~sugars)))
@@ -89,3 +88,15 @@
 
 (defmacro with-meta [sugar meta-sugar]
   `(->WithMeta (pattern ~sugar) (pattern ~meta-sugar)))
+
+(defmacro view
+  ([sugar]
+     (pattern/pattern->view (eval (desugar-pattern sugar))))
+  ([name sugar]
+     (graph/graph->view (eval (desugar-graph sugar))))) ;; TODO do we want to allow graph splicing?
+
+(defmacro trace
+  ([sugar]
+     (pattern/pattern->view (debug/pattern-with-print-trace (eval (desugar-pattern sugar)))))
+  ([name sugar]
+     (graph/graph->view (debug/graph-with-print-trace (eval (desugar-graph sugar))))))

@@ -1,7 +1,8 @@
 (ns strucjure.regression
   (:require [clojure.test :refer [deftest is]]
             clojure.walk
-            [plumbing.core :refer [map-vals]]))
+            [plumbing.core :refer [map-vals]]
+            strucjure.regression.tests))
 
 (def results-file "./test/strucjure/regression/results.clj")
 

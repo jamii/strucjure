@@ -32,13 +32,13 @@ nil
 [[:foo 1] nil]
 :strucjure.regression/fn
 [(1 2) nil]
-^{:ns #<Namespace strucjure.regression.tests>, :name eg-num, :column 5, :line 38, :file "NO_SOURCE_PATH"} #'strucjure.regression.tests/eg-num
-^{:ns #<Namespace strucjure.regression.tests>, :name eg-num-out, :column 5, :line 42, :file "NO_SOURCE_PATH"} #'strucjure.regression.tests/eg-num-out
-^{:ns #<Namespace strucjure.regression.tests>, :name num, :column 5, :line 46, :file "NO_SOURCE_PATH"} #'strucjure.regression.tests/num
+^{:ns #<Namespace strucjure.regression.sandbox>, :name eg-num, :file "NO_SOURCE_PATH"} #'strucjure.regression.sandbox/eg-num
+^{:ns #<Namespace strucjure.regression.sandbox>, :name eg-num-out, :file "NO_SOURCE_PATH"} #'strucjure.regression.sandbox/eg-num-out
+^{:ns #<Namespace strucjure.regression.sandbox>, :name num, :file "NO_SOURCE_PATH"} #'strucjure.regression.sandbox/num
+[0 nil]
 nil
-nil
-nil
-nil
+[1 nil]
+[2 nil]
 nil
 [(quote 1) (quote 2) (strucjure.pattern/->Rest (strucjure.pattern/->ZeroOrMore (quote 3)))]
 [1 2 ^{:strucjure.pattern/rest true} #strucjure.pattern.ZeroOrMore{:pattern 3}]
@@ -61,11 +61,16 @@ nil
 #strucjure.pattern.Or{:patterns [[(->Bind (quote succ) (->View (quote succ))) (->Bind (quote zero) (->View (quote zero)))]]}
 (clojure.core/list (quote 1) (quote 2) (quote 3))
 (clojure.core/list (quote succ))
-^{:ns #<Namespace strucjure.regression.tests>, :name num-graph, :column 5, :line 73, :file "NO_SOURCE_PATH"} #'strucjure.regression.tests/num-graph
+^{:ns #<Namespace strucjure.regression.sandbox>, :name num-graph, :file "NO_SOURCE_PATH"} #'strucjure.regression.sandbox/num-graph
+^{:ns #<Namespace strucjure.regression.sandbox>, :name num-out, :file "NO_SOURCE_PATH"} #'strucjure.regression.sandbox/num-out
 (clojure.core/let [foo (strucjure.pattern/->Bind (quote foo) (strucjure.pattern/->View (quote foo)))] (strucjure.graph/with-named-nodes {(quote foo) (strucjure.sugar/pattern (clojure.core/unquote foo))}))
-^{:ns #<Namespace strucjure.regression.tests>, :name num, :column 5, :line 79, :file "NO_SOURCE_PATH"} #'strucjure.regression.tests/num
-[zero nil]
-[(succ (succ zero)) nil]
+^{:ns #<Namespace strucjure.regression.sandbox>, :name num, :file "NO_SOURCE_PATH"} #'strucjure.regression.sandbox/num
+[0 nil]
+[2 nil]
 nil
 nil
-#strucjure.pattern.Bind{:symbol foo, :pattern [#strucjure.pattern.Bind{:symbol foo, :pattern 1} #strucjure.pattern.Bind{:symbol foo, :pattern 2} #strucjure.pattern.Bind{:symbol foo, :pattern #strucjure.pattern.Or{:patterns (#strucjure.pattern.Bind{:symbol foo, :pattern #strucjure.pattern.Bind{:symbol x, :pattern #strucjure.pattern.Bind{:symbol foo, :pattern (#strucjure.pattern.Bind{:symbol foo, :pattern 2} #strucjure.pattern.Bind{:symbol foo, :pattern 3})}}})}}]}
+(trace-pattern [1 2 3] [1 2 3])
+(fn [:strucjure.regression/gensym] (clojure.core/binding [strucjure.debug/*depth* 0] (clojure.core/let [_ (:strucjure.regression/fn (quote "[1 2 3]") :strucjure.regression/gensym) :strucjure.regression/gensym (clojure.core/when (clojure.core/vector? :strucjure.regression/gensym) (clojure.core/when (clojure.core/>= (clojure.core/count :strucjure.regression/gensym) 3) (clojure.core/let [:strucjure.regression/gensym (clojure.core/nth :strucjure.regression/gensym 0)] (clojure.core/let [_ (:strucjure.regression/fn (quote "1") :strucjure.regression/gensym) :strucjure.regression/gensym (clojure.core/when (clojure.core/= :strucjure.regression/gensym (quote 1)) (clojure.core/let [:strucjure.regression/gensym (clojure.core/nth :strucjure.regression/gensym 1)] (clojure.core/let [_ (:strucjure.regression/fn (quote "2") :strucjure.regression/gensym) :strucjure.regression/gensym (clojure.core/when (clojure.core/= :strucjure.regression/gensym (quote 2)) (clojure.core/let [:strucjure.regression/gensym (clojure.core/nth :strucjure.regression/gensym 2)] (clojure.core/let [_ (:strucjure.regression/fn (quote "3") :strucjure.regression/gensym) :strucjure.regression/gensym (clojure.core/when (clojure.core/= :strucjure.regression/gensym (quote 3)) [[:strucjure.regression/gensym :strucjure.regression/gensym :strucjure.regression/gensym] (clojure.core/seq (clojure.core/subvec :strucjure.regression/gensym 3))]) _ (:strucjure.regression/fn (quote "3") :strucjure.regression/gensym)] :strucjure.regression/gensym))) _ (:strucjure.regression/fn (quote "2") :strucjure.regression/gensym)] :strucjure.regression/gensym))) _ (:strucjure.regression/fn (quote "1") :strucjure.regression/gensym)] :strucjure.regression/gensym)))) _ (:strucjure.regression/fn (quote "[1 2 3]") :strucjure.regression/gensym)] :strucjure.regression/gensym)))
+[[1 2 3] nil]
+[1 2 3]
+(fn [:strucjure.regression/gensym] (clojure.core/binding [strucjure.debug/*depth* 0] (clojure.core/let [_ (:strucjure.regression/fn (quote "[1 2 3]") :strucjure.regression/gensym) :strucjure.regression/gensym (clojure.core/when (clojure.core/vector? :strucjure.regression/gensym) (clojure.core/when (clojure.core/>= (clojure.core/count :strucjure.regression/gensym) 3) (clojure.core/let [:strucjure.regression/gensym (clojure.core/nth :strucjure.regression/gensym 0)] (clojure.core/let [_ (:strucjure.regression/fn (quote "1") :strucjure.regression/gensym) :strucjure.regression/gensym (clojure.core/when (clojure.core/= :strucjure.regression/gensym (quote 1)) (clojure.core/let [:strucjure.regression/gensym (clojure.core/nth :strucjure.regression/gensym 1)] (clojure.core/let [_ (:strucjure.regression/fn (quote "2") :strucjure.regression/gensym) :strucjure.regression/gensym (clojure.core/when (clojure.core/= :strucjure.regression/gensym (quote 2)) (clojure.core/let [:strucjure.regression/gensym (clojure.core/nth :strucjure.regression/gensym 2)] (clojure.core/let [_ (:strucjure.regression/fn (quote "3") :strucjure.regression/gensym) :strucjure.regression/gensym (clojure.core/when (clojure.core/= :strucjure.regression/gensym (quote 3)) [[:strucjure.regression/gensym :strucjure.regression/gensym :strucjure.regression/gensym] (clojure.core/seq (clojure.core/subvec :strucjure.regression/gensym 3))]) _ (:strucjure.regression/fn (quote "3") :strucjure.regression/gensym)] :strucjure.regression/gensym))) _ (:strucjure.regression/fn (quote "2") :strucjure.regression/gensym)] :strucjure.regression/gensym))) _ (:strucjure.regression/fn (quote "1") :strucjure.regression/gensym)] :strucjure.regression/gensym)))) _ (:strucjure.regression/fn (quote "[1 2 3]") :strucjure.regression/gensym)] :strucjure.regression/gensym)))

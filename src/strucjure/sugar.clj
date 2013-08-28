@@ -93,10 +93,10 @@
   ([sugar]
      (pattern/pattern->view (eval (desugar-pattern sugar))))
   ([name sugar]
-     (graph/graph->view (eval (desugar-graph sugar))))) ;; TODO do we want to allow graph splicing?
+     (graph/graph->view name (eval (desugar-graph sugar))))) ;; TODO do we want to allow graph splicing?
 
 (defmacro trace
   ([sugar]
      (pattern/pattern->view (debug/pattern-with-print-trace (eval (desugar-pattern sugar)))))
   ([name sugar]
-     (graph/graph->view (debug/graph-with-print-trace (eval (desugar-graph sugar))))))
+     (graph/graph->view name (debug/graph-with-print-trace (eval (desugar-graph sugar))))))

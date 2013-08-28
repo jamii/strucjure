@@ -25,11 +25,14 @@
      result->body -- (fn [output remaining] form), returns the body to be evaluated on success, should be called *exactly* once"))
 
 (defn ^:dynamic *pattern->clj* [this input output? state result->body]
-  (if (symbol? input)
-    (pattern->clj this input output? state result->body)
-    (with-syms [input-sym]
-      `(let [~input-sym ~input]
-         ~(pattern->clj this input-sym output? state result->body)))))
+  (let [body (if (symbol? input)
+               (pattern->clj this input output? state result->body)
+               (with-syms [input-sym]
+                 `(let [~input-sym ~input]
+                    ~(pattern->clj this input-sym output? state result->body))))]
+    (if-let [bindings (::bindings (meta this))]
+      `(binding [~@(aconcat bindings)] ~body)
+      body)))
 
 (defn with-binding [pattern var val]
   (vary-meta pattern clojure.core/update-in [::bindings] #(assoc % var val)))
@@ -281,5 +284,4 @@
   ([name pattern]
       (with-syms [input]
         `(~name [~input]
-                (binding [~@(aconcat (::bindings (meta pattern)))]
-                  ~(*pattern->clj* pattern input true {} (fn [output remaining _] [output remaining])))))))
+                ~(*pattern->clj* pattern input true {} (fn [output remaining _] [output remaining]))))))

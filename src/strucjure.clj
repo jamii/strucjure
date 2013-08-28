@@ -2,7 +2,7 @@
 
 ;; --- TODO ---
 ;; trace behaves a bit weirdly for patterns - maybe need an output-fn in ->Trace
-;; with-binding in pattern is fragile (also a bad name...) could maybe replace with ->Binding and rename ->Bind to ->Let
+;; need to figure out how to refer graphs in sugar -- maybe view/trace should not use sugar at all
 ;; tests (string in regression, readme, bootstrap, generative)
 ;; error reporting - deepest-error in graph, maybe first-error in pattern
 ;; README - http://hugoduncan.org/post/evaluate_clojure_in_emacs_markdown_buffers/ or similar
@@ -23,6 +23,7 @@
 ;;    it needs depth and result
 ;;    could walk and wrap every Or? and every when? nope, gonna have to be hardcoded
 ;;  for now stick with the current scheme and focus on tracing
+;; pattern trace could also benefit from static depth
 
 ;; --- OPTIMISATIONS ---
 ;; check if output unchanged in patterns - maybe rethink how output/bindings are passed
@@ -31,6 +32,7 @@
 ;; --- LATER ---
 ;; use tuple or deftype for result?
 ;; figure out how to roundtrip closures through eval
+;;   pass in using bindings?
 ;; need to be able to alter views (store original pattern in meta and have pattern/alter and graph/alter)
 ;; cut by returning delay - can trampoline to the nearest try - needs work inside Or/ZeroOrMore
 ;; gens

@@ -1,11 +1,11 @@
 (ns strucjure)
 
 ;; --- TODO ---
-;; trace behaves a bit weirdly for patterns - maybe need an output-fn in ->Trace
 ;; need to figure out how to refer graphs in sugar -- maybe view/trace should not use sugar at all
 ;; tests (string in regression, readme, bootstrap, generative)
 ;; error reporting - deepest-error in graph, maybe first-error in pattern
 ;; README - http://hugoduncan.org/post/evaluate_clojure_in_emacs_markdown_buffers/ or similar
+;; use wolfes trick for closures. for lexically scoped parts, just add dependency in fnk and don't check it in Output
 
 ;; --- ERRORS ---
 ;; maybe need to rethink [o r] vs nil
@@ -30,9 +30,10 @@
 ;; should Output check output?
 
 ;; --- LATER ---
+;; clumsiness in trace-pattern comes from using CPS for ->And in the compiler
+;;   could use CPS in graph compiler too - would help with trampolining too
+;;   wait until we have benchmarks though
 ;; use tuple or deftype for result?
-;; figure out how to roundtrip closures through eval
-;;   pass in using bindings?
 ;; need to be able to alter views (store original pattern in meta and have pattern/alter and graph/alter)
 ;; cut by returning delay - can trampoline to the nearest try - needs work inside Or/ZeroOrMore
 ;; gens

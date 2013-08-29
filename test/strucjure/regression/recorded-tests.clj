@@ -74,3 +74,4 @@
 ((trace [1 2 3]) [1 2 3])
 (pattern [1 2 3])
 (pattern->view (strucjure.debug/pattern-with-print-trace (pattern [1 2 3])))
+((trace (clojure.core/unquote (or {:1 2, :3 [4 5]} {:1 2}))) {:1 2, :3 [3 5]})

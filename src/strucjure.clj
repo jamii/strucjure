@@ -1,35 +1,30 @@
 (ns strucjure)
 
+;; --- STACK ---
+;; working on view
+;; testing compiler - list-xy is broken
+
 ;; --- TODO ---
 ;; need to figure out how to refer graphs in sugar -- maybe view/trace should not use sugar at all
 ;; tests (string in regression, readme, bootstrap, generative)
-;; error reporting - deepest-error in graph, maybe first-error in pattern
 ;; README - http://hugoduncan.org/post/evaluate_clojure_in_emacs_markdown_buffers/ or similar
 ;; use wolfes trick for closures. for lexically scoped parts, just add dependency in fnk and don't check it in Output
 
 ;; --- ERRORS ---
-;; maybe need to rethink [o r] vs nil
-;; need to return failure messages
-;; can they be tracked imperatively?
-;; later on, cut and commit will require modifying (when-let [[o r] ...] ...)
-;; proposal
-;;   use Success and Fail
-;;   if-result, when-result, check
-;;   rename state->scope, output?->control. track :output, :trace, :depth
-;;   pass error? to decide whether or not to bother constructing a real Fail
-;;     we always have to insert depth, at least
-;;   allow graph to choose heuristic for tracking failures
-;;  what if we pass in a mutable var to use for error tracking
-;;    it needs depth and result
-;;    could walk and wrap every Or? and every when? nope, gonna have to be hardcoded
-;;  for now stick with the current scheme and focus on tracing
-;; pattern trace could also benefit from static depth
+;; use (on-pass output remaining scope) (on-fail input reason state)
+;; (Pass. output remaining) (Fail. input reason)
+;; first error? deepest error?
+;;   if all same depth as Or, report the Or
 
 ;; --- OPTIMISATIONS ---
 ;; check if output unchanged in patterns - maybe rethink how output/bindings are passed
 ;; should Output check output?
 
 ;; --- LATER ---
+;; extensible, multi-pass compiler - stop trying to fit everything into pattern->clj
+;; consider separating output from patterns - makes closures much easier (what about guard? and is?)
+;; error reporting - deepest-error in graph, maybe first-error in pattern
+;; for prewalks can just build ast by attaching name and bindings in metadata
 ;; clumsiness in trace-pattern comes from using CPS for ->And in the compiler
 ;;   could use CPS in graph compiler too - would help with trampolining too
 ;;   wait until we have benchmarks though
@@ -38,12 +33,12 @@
 ;; cut by returning delay - can trampoline to the nearest try - needs work inside Or/ZeroOrMore
 ;; gens
 ;; type hinting
-;; may need to rethink seq patterns and Rest
 ;; string patterns, ~(chain "foo" "/" "bar")
 ;; binary patterns
 ;; reimplement core
 
 ;; --- LESSONS ---
+;; really need proper mutable vars for compiler target
 ;; huge premature optimisation of ->Or - measure twice, cut once
 ;; should look like constructors as much as possible
 ;; representation as plain data-structure, minimal syntax

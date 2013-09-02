@@ -9,6 +9,12 @@
 (defmacro assert [bool & msg]
   `(clojure.core/assert ~bool (binding [*print-meta* true] (pr-str ~@msg))))
 
+(defn- update
+  ([map & keys&funs]
+     (if-let [[key fun & keys&funs] keys&funs]
+       (recur (assoc map key (fun (get map key))) keys&funs)
+       map)))
+
 (defn key->sym [key]
   (symbol (.substring (str key) 1)))
 
@@ -55,7 +61,7 @@
                  ((:used (meta core)) (:name core)) true
                  :else output?)
         core (if (instance? strucjure.core.And core)
-               (core/->And (with-output? (:core-a core) false) (with-output? (:core-b core) output?))
+               (update core :core-a #(with-output? % false) :core-b #(with-output? % output?))
                (core/fmap core #(with-output? % output?)))]
     (vary-meta core assoc :output? output?)))
 
@@ -63,7 +69,7 @@
   (let [core (vary-meta core assoc :remaining? remaining?)]
     (condp instance? core
       strucjure.core.Struct (core/fmap core #(with-remaining? % false))
-      strucjure.core.Chain (core/->Chain (with-remaining? (:core-a core) true) (with-remaining? (:core-b core) remaining?))
+      strucjure.core.Chain (update core :core-a #(with-remaining? % true) :core-b #(with-remaining? % remaining?))
       (core/fmap core #(with-remaining? % remaining?)))))
 
 (def failure (Exception. "Match failed"))
@@ -176,6 +182,11 @@
   ((eval (core->view (list-x 1) {} true true)) (list 1 2))
   ((eval (core->view (list-x 1) {} true false)) (list 1 2))
   (defn list-xy [x y] (->Chain (list-x x) (list-x y)))
+  (with-remaining? (with-output? (with-used (list-xy 1 2) #{}) true) true)
   (pprint (core->view (list-xy 1 2) {} true true))
   ((eval (core->view (list-xy 1 2) {} true true)) (list 1 2))
+  ((eval (core->view (list-xy 1 2) {} true true)) (list 1 2 3))
+  ((eval (core->view (list-xy 1 2) {} true true)) (list 1))
+  ((eval (core->view (list-xy 1 2) {} true true)) (list 1 4))
+  ((eval (core->view (->Chain (list-x 0) (->Chain (list-x 1) (list-x 2))) #{} true true)) (list 0 1 2 3))
   )

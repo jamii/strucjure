@@ -1,8 +1,10 @@
 (ns strucjure)
 
 ;; --- STACK ---
-;; working on view
-;; testing compiler - list-xy is broken
+;; could we remove core and be even more compact?
+;; define subpatterns / with-subpatterns for all patterns
+;; define named, output?, remaining?, used with defaults that use fmap
+;; use existing cores as output fns
 
 ;; --- TODO ---
 ;; need to figure out how to refer graphs in sugar -- maybe view/trace should not use sugar at all

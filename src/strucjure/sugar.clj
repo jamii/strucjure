@@ -80,9 +80,6 @@
 (defmacro and [& sugars]
   `(->And [~@(for [sugar sugars] `(pattern ~sugar))]))
 
-(defmacro & [sugar]
-  `(->Rest (pattern ~sugar)))
-
 (defmacro * [sugar]
   `(->ZeroOrMore (pattern ~sugar)))
 

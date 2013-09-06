@@ -1,20 +1,15 @@
 (ns strucjure)
 
 ;; --- STACK ---
-;; could we remove core and be even more compact?
-;; define subpatterns / with-subpatterns for all patterns
-;; define named, output?, remaining?, used with defaults that use fmap
-;; use existing cores as output fns
+;; still testing new view compiler
+;; finish porting upwards
 
 ;; --- TODO ---
-;; need to figure out how to refer graphs in sugar -- maybe view/trace should not use sugar at all
-;; tests (string in regression, readme, bootstrap, generative)
 ;; README - http://hugoduncan.org/post/evaluate_clojure_in_emacs_markdown_buffers/ or similar
+;; tests (string in regression, readme, bootstrap, generative)
 ;; use wolfes trick for closures. for lexically scoped parts, just add dependency in fnk and don't check it in Output
 
 ;; --- ERRORS ---
-;; use (on-pass output remaining scope) (on-fail input reason state)
-;; (Pass. output remaining) (Fail. input reason)
 ;; first error? deepest error?
 ;;   if all same depth as Or, report the Or
 
@@ -84,3 +79,13 @@
   [0 * & ~ot] --> [0 (1 2 1 2)]
   [0 & * ~ot] --> [0 (1 2) (1 2)]
   [0 & * & ~ot] --> [0 1 2 1 2])
+
+;; http://www.mercury.csse.unimelb.edu.au/information/papers/packrat.pdf
+
+;; 'This paper argues that (a) packrat parsers can be trivially implemented using a combination
+;; of deﬁnite clause grammar rules and memoing, and that (b) packrat
+;; parsing may actually be signiﬁcantly less eﬃcient than plain recursive
+;; descent with backtracking, but (c) memoing the recognizers of just one or
+;; two nonterminals, selected in accordance with Amdahl’s law, can some-
+;; times yield speedups. We present experimental evidence to support these
+;; claims.'

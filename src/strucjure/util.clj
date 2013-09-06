@@ -1,25 +1,44 @@
 (ns strucjure.util
   (:refer-clojure :exclude [assert])
-  (:require clojure.walk
-            [plumbing.core :refer [for-map map-vals]]))
+  (:require [clojure.set :refer [union]]
+            [plumbing.core :refer [aconcat]]))
 
 (defmacro assert [bool & msg]
   `(clojure.core/assert ~bool (binding [*print-meta* true] (pr-str ~@msg))))
 
-(defn update
-  ([map & keys&funs]
-     (if-let [[key fun & keys&funs] keys&funs]
-       (recur (assoc map key (fun (get map key))) keys&funs)
-       map)))
-
 (defn key->sym [key]
   (symbol (.substring (str key) 1)))
 
-(defn fnk->call [fnk]
+(defn fnk->pos-fn [fnk]
   (if-let [[pos-fn keywords] (:plumbing.fnk.impl/positional-info (meta fnk))]
-    (cons pos-fn (map key->sym keywords))
-    (assert nil (pr-str "Not a fnk:" fnk))))
+    pos-fn
+    (assert nil "Not a fnk:" fnk)))
+
+(defn fnk->args [fnk]
+  (if-let [[pos-fn keywords] (:plumbing.fnk.impl/positional-info (meta fnk))]
+    (map key->sym keywords)
+    (assert nil "Not a fnk:" fnk)))
 
 (defmacro with-syms [syms & body]
   `(let ~(vec (apply concat (for [sym syms] [sym `(gensym ~(str sym))])))
      ~@body))
+
+(defmacro extend-protocol-by-fn [protocol & fns]
+  (let [class->fns (apply merge-with union
+                                (for [[fn-symbol fn-name fn-args & classes&bodies] fns
+                                      [classes body] (partition 2 classes&bodies)
+                                      class classes]
+                                  {class #{(list fn-name fn-args body)}}))]
+    (print class->fns)
+    `(extend-protocol ~protocol
+       ~@(aconcat (for [[class fns] class->fns] (cons class fns))))))
+
+(defn try-vary-meta [obj & args]
+  (if (instance? clojure.lang.IObj obj)
+    (apply vary-meta obj args)
+    obj))
+
+(defn try-with-meta [obj meta]
+  (if (instance? clojure.lang.IObj obj)
+    (with-meta obj meta)
+    obj))

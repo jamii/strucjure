@@ -90,7 +90,7 @@
              'zero (fnk [] 0)
              'succ (fnk [x] (inc x))))
 (macroexpand-1 '(graph foo ~foo))
-(def num ('num (eval (graph->views num-out true true))))
+(def num ('num (eval (graph->views (graph-with-trace num-out) true true))))
 (num 'zero)
 (num '(succ (succ zero)))
 (num '(1 (succ zero)))

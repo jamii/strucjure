@@ -29,8 +29,8 @@
       traced-pattern
       (print-trace traced-pattern (pr-str pattern)))))
 
-;; TODO where do we put the bindings?
-(defn graph-with-trace [graph input-fn]
+(defn graph-with-trace [graph]
   (with-meta
-    (for-map [[name pattern] graph] name (print-trace pattern name))
+    (for-map [[name pattern] graph] name
+             (pattern/->Trace pattern (pr-str name) print-input print-success print-failure))
     (meta graph)))

@@ -1,8 +1,7 @@
 (ns strucjure)
 
 ;; --- STACK ---
-;; still testing new view compiler
-;; finish porting upwards
+;; recover tracing on graphs
 
 ;; --- TODO ---
 ;; README - http://hugoduncan.org/post/evaluate_clojure_in_emacs_markdown_buffers/ or similar

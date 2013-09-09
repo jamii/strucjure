@@ -2,24 +2,24 @@
   (:refer-clojure :exclude [with-meta * or and])
   (:require [plumbing.core :refer [fnk for-map aconcat]]
             [strucjure.util :refer [with-syms]]
-            [strucjure.pattern :as pattern :refer [->Rest ->Seqable ->Any ->Is ->Guard ->Bind ->Output ->Or ->And ->ZeroOrMore ->WithMeta ->View]]
+            [strucjure.pattern :as pattern :refer [->Rest ->Seqable ->Any ->Is ->Guard ->Name ->Output ->Or ->And ->ZeroOrMore ->WithMeta ->Node]]
+            [strucjure.graph :as graph]
             [strucjure.debug :as debug]
-            [strucjure.graph :as graph]))
+            [strucjure.view :as view]))
 
 ;; TODO wrapping parser/rest in [] and calling first (elem) is ugly
 
 (def sugared
-  (letfn [(view [sym] (->Bind sym (->View sym)))
-          (bindable [pattern] (->WithMeta pattern (->Or [{:tag (->Or [(view 'binding) (->Bind 'binding nil)])} (->Bind 'binding nil)])))]
-    {'pattern (bindable (->Or [(view 'unquote) (view 'seq) (view 'vec) (view 'map) (view 'any) (view 'default)]))
-     'unquote (list `unquote (->Bind 'unquoted (->Any)))
-     'seq (list (->Rest (view 'elems)))
-     'vec (vector (->Rest (view 'elems)))
-     'elems (->ZeroOrMore (->Rest (view 'elem)))
-     'elem (->Or [(view 'parser) (view 'rest) (list (view 'pattern))])
-     'parser (list (bindable (->Bind 'prefix (->Or ['*]))) (->Rest (view 'elem))) ;; TODO + ?
-     'rest (list (bindable (->Bind 'prefix '&)) (->Rest (view 'elem)))
-     'map (->And [{} (->Bind 'elems (->Seqable [(->Rest (->ZeroOrMore [(->Any) (view 'pattern)]))]))]) ;; TODO make s/hashmap for this pattern
+  (letfn [(bindable [pattern] (->WithMeta pattern (->Or [{:tag (->Node 'binding)} (->Any)])))]
+    {'pattern (bindable (->Or [(->Node 'unquote) (->Node 'seq) (->Node 'vec) (->Node 'map) (->Node 'any) (->Node 'default)]))
+     'unquote (list `unquote (->Name 'unquoted (->Any)))
+     'seq (list (->Rest (->Node 'elems)))
+     'vec (vector (->Rest (->Node 'elems)))
+     'elems (->ZeroOrMore (->Rest (->Node 'elem)))
+     'elem (->Or [(->Node 'parser) (->Node 'rest) (list (->Node 'pattern))])
+     'parser (list (bindable (->Name 'prefix (->Or ['*]))) (->Rest (->Node 'elem))) ;; TODO + ?
+     'rest (list (bindable (->Name 'prefix '&)) (->Rest (->Node 'elem)))
+     'map (->And [{} (->Name 'elems (->Seqable [(->Rest (->ZeroOrMore [(->Any) (->Node 'pattern)]))]))]) ;; TODO make s/hashmap for this pattern
      'binding (->Is #(symbol? %))
      'any '_
      'default (->Any)}))
@@ -28,15 +28,15 @@
   {'* 'strucjure.pattern/->ZeroOrMore})
 
 (def desugared
-  (graph/output-in (graph/with-named-nodes sugared)
-                   'pattern (fnk [binding pattern] (if binding `(->Bind '~binding ~pattern) pattern))
+  (graph/output-in (graph/with-named-inner-nodes (graph/with-named-outer-nodes sugared))
+                   'pattern (fnk [binding pattern] (if binding `(->Name '~binding ~pattern) pattern))
                    'unquote (fnk [unquoted] unquoted)
                    'seq (fnk [seq] `(list ~@seq))
                    'parser (fnk [binding prefix elem]
                                 [(let [parser `(~(prefixes prefix) ~(first elem))]
-                                   (if binding `(->Bind '~binding ~parser) parser))])
+                                   (if binding `(->Name '~binding ~parser) parser))])
                    'rest (fnk [binding elem]
-                              [`(->Rest ~(if binding `(->Bind '~binding ~(first elem)) (first elem)))])
+                              [`(->Rest ~(if binding `(->Name '~binding ~(first elem)) (first elem)))])
                    'map (fnk [map] (into {} map))
                    'any (fnk [] `(strucjure.pattern/->Any))
                    'default (fnk [default] `'~default)))
@@ -44,7 +44,7 @@
 ;; TODO error reporting here
 ;; TODO dont eval each time
 (defn desugar-pattern [sugar]
-  (let [desugar-view (eval (graph/graph->view 'pattern desugared))]
+  (let [desugar-view ('pattern (eval (view/graph->views desugared true true)))]
     (if-let [[output remaining] (desugar-view sugar)]
       (if (nil? remaining)
         output
@@ -55,9 +55,10 @@
   (desugar-pattern sugar))
 
 (defn desugar-graph [name->sugar]
-  `(let [~@(aconcat (for [name (keys name->sugar)] [name `(->Bind '~name (->View '~name))]))]
-     (strucjure.graph/with-named-nodes
-       ~(for-map [[name sugar] name->sugar] `'~name `(pattern ~sugar)))))
+  `(let [~@(aconcat (for [name (keys name->sugar)] [name `(->Node '~name)]))]
+     (graph/with-named-inner-nodes
+       (graph/with-named-outer-nodes
+         ~(for-map [[name sugar] name->sugar] `'~name `(pattern ~sugar))))))
 
 (defmacro graph [& names&sugars]
   (desugar-graph (for-map [[name sugar] (partition 2 names&sugars)] name sugar)))
@@ -86,14 +87,8 @@
 (defmacro with-meta [sugar meta-sugar]
   `(->WithMeta (pattern ~sugar) (pattern ~meta-sugar)))
 
-(defmacro view
-  ([sugar]
-     (pattern/pattern->view (eval (desugar-pattern sugar))))
-  ([name sugar]
-     (graph/graph->view name (eval (desugar-graph sugar))))) ;; TODO do we want to allow graph splicing?
+(defmacro view [sugar]
+  (view/pattern->view (eval (desugar-pattern sugar)) true true))
 
-(defmacro trace
-  ([sugar]
-     (pattern/pattern->view (debug/pattern-with-print-trace (eval (desugar-pattern sugar)))))
-  ([name sugar]
-     (graph/graph->view name (debug/graph-with-print-trace (eval (desugar-graph sugar))))))
+(defmacro trace [sugar]
+  (view/pattern->view (debug/pattern-with-trace (eval (desugar-pattern sugar))) true true))

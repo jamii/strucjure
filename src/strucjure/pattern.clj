@@ -18,7 +18,7 @@
 (defrecord Any [])
 (defrecord Is [fn])
 (defrecord Guard [pattern fnk])
-(defrecord Name [symbol pattern])
+(defrecord Name [name pattern])
 (defrecord ZeroOrMore [pattern])
 (defrecord WithMeta [pattern meta-pattern])
 (defrecord Or [patterns])
@@ -45,7 +45,7 @@
 
  (fn with-subpatterns [this subpatterns]
    [nil Object Any Is Node] this
-   [ISeq] (seq subpatterns)
+   [ISeq] (apply list subpatterns)
    [IPersistentVector] (vec subpatterns)
    [IPersistentMap] (zipmap (keys this) subpatterns)
    [Rest Guard Output Name ZeroOrMore Trace Binding] (assoc this :pattern (first subpatterns))
@@ -69,12 +69,21 @@
 (defn postwalk [pattern f]
   (f (fmap pattern #(postwalk % f))))
 
-(defn with-scope [pattern used-above]
-  (let [subpatterns&bound-below (map #(with-scope % used-above) (subpatterns pattern))
-        used-here (union used-above (used pattern))
-        bound-here (apply union (map second subpatterns&bound-below))
-        unbound-here (difference bound-here used-here)
+(defn with-bound [pattern]
+  (let [subpatterns&bound-below (map with-bound (subpatterns pattern))
+        bound-here (apply union (bound pattern) (map second subpatterns&bound-below))
         pattern (with-subpatterns pattern (map first subpatterns&bound-below))
-        pattern (try-vary-meta pattern assoc :used-here used-here :bound-here bound-here)]
-    (assert (empty? unbound-here) "Names" unbound-here "are used but not bound in" pattern)
+        pattern (try-vary-meta pattern assoc :bound-here bound-here)]
     [pattern bound-here]))
+
+(defn with-used [pattern used-above]
+  (let [used-here (union (used pattern) used-above)
+        subpatterns (map #(with-used % used-here) (subpatterns pattern))
+        pattern (with-subpatterns pattern subpatterns)
+        pattern (try-vary-meta pattern assoc :used-here used-here)]
+    pattern))
+
+(defn check-used-not-bound [pattern]
+  (prewalk pattern (fn [pattern]
+                      (let [used-not-bound (difference (used pattern) (:bound-here (meta pattern)))]
+                        (assert (empty? used-not-bound) "Names" used-not-bound "are used but not bound in" pattern)))))

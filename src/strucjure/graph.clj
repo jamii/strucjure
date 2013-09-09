@@ -23,7 +23,7 @@
     pattern))
 
 (defn with-named-inner-nodes [graph]
-  (with-meta (map-vals #(pattern/postwalk % named-node)) (meta graph)))
+  (with-meta (map-vals #(pattern/postwalk % named-node) graph) (meta graph)))
 
 (defn with-named-outer-nodes [graph]
   (with-meta

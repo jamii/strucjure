@@ -1,11 +1,11 @@
 (ns strucjure.view
   (:refer-clojure :exclude [assert])
-  (:require [plumbing.core :refer [aconcat]]
+  (:require [plumbing.core :refer [aconcat for-map]]
             [strucjure.util :refer [with-syms assert fnk->pos-fn fnk->args extend-protocol-by-fn]]
-            [strucjure.core :as core]
-            [strucjure.pattern :as pattern])
+            [strucjure.pattern :as pattern]
+            [strucjure.graph :as graph])
   (:import [clojure.lang ISeq IPersistentVector IPersistentMap]
-           [strucjure.pattern Any Is Rest Guard Output Name ZeroOrMore WithMeta Or And Seqable]))
+           [strucjure.pattern Any Is Rest Guard Name ZeroOrMore WithMeta Or And Seqable Output Node Trace Binding]))
 
 ;; TODO only allowed remaining inside Rest?
 ;; TODO catch exceptions from output and guards etc
@@ -69,7 +69,7 @@
   `(throw failure))
 
 (defmacro failure? [exc]
-  `(identical? ~failure ~exc))
+  `(identical? failure ~exc))
 
 (defmacro on-fail [t f]
   `(try ~t
@@ -129,9 +129,6 @@
    [Object]
    `(check (= ~input '~this) ~input)
 
-   [Rest]
-   (assert nil "Cannot compile Rest outside of a parsing context:" this)
-
    [ISeq]
    (do (println 'this this)
        `(check (seq? ~input)
@@ -147,13 +144,16 @@
 
    [IPersistentMap]
    `(check (map? ~input)
-           ~(map->view this output? remaining?))))
+           ~(map->view this output? remaining?))
+
+   [Rest]
+   (assert nil "Cannot compile Rest outside of a parsing context:" this)))
 
 ;; --- LOGIC PATTERNS ---
 
 (extend-protocol-by-fn
  View
- (fn view* [{:keys [pattern patterns meta-pattern fn fnk symbol]}
+ (fn view* [{:keys [pattern patterns meta-pattern fn fnk symbol name input-fn success-fn failure-fn var value]}
            {:keys [used-above]} input output? remaining?]
 
    [Any]
@@ -166,10 +166,6 @@
    [Guard]
    `(let [output# ~(view pattern input output? remaining?)]
       (check (call-fnk ~fnk) output#))
-
-   [Output]
-   `(do ~(view pattern input false remaining?)
-        (call-fnk ~fnk))
 
    [Name]
    (with-syms [output]
@@ -188,13 +184,15 @@
            set-remaining (cond
                           remaining? `(set-remaining! ~loop-input)
                           (instance? Rest pattern) `(set-remaining! nil))]
-       `(loop [~loop-input ~input
-               ~loop-output []]
-          (let [~result (on-fail ~body failure)]
-            (if (failure? ~result)
-              (do ~set-remaining
-                  (seq ~loop-output))
-              ~recur)))))
+
+       `(check (instance? clojure.lang.Seqable ~input)
+               (loop [~loop-input (seq ~input)
+                      ~loop-output []]
+                 (let [~result (on-fail ~body failure)]
+                   (if (failure? ~result)
+                     (do ~set-remaining
+                         (seq ~loop-output))
+                     ~recur))))))
 
    [WithMeta]
    `(try-with-meta ~(view pattern input output? remaining?)
@@ -204,16 +202,44 @@
    (or->view patterns input output? remaining?)
 
    [And]
-   (do ~@(interleave (map #(view % input false remaining?) (butlast patterns))
+   `(do ~@(interleave (map #(view % input false remaining?) (butlast patterns))
                      (repeat (when remaining? `(set-remaining! false))))
-       ~(view (last patterns) input output? remaining?))))
+       ~(view (last patterns) input output? remaining?))
 
-(defn pattern->view [pattern output? remaining?]
-  (let [[pattern bound-here] (pattern/with-scope pattern #{})]
-    (with-syms [input]
-      `(fn [~input]
-         (let [~@(interleave (cons '&remaining bound-here) (repeat `(new-mutable!)))]
-           [~(view pattern input output? remaining?) (get-remaining!)])))))
+   [Output]
+   `(do ~(view pattern input false remaining?)
+        (call-fnk ~fnk))
+
+   [Node]
+   `(let [[output# remaining#] (~name ~input)]
+      (set-remaining! remaining#)
+      output#)
+
+   [Trace]
+   `(do (~input-fn ~name ~input)
+         (try (let [output# ~(view pattern input output? remaining?)]
+                (~success-fn output# (get-remaining!))
+                output#)
+              (catch Exception exc#
+                (~failure-fn exc#)
+                (throw exc#))))
+
+   [Binding]
+   `(binding [~var ~value] ~(view pattern input output? remaining?))))
+
+(defn pattern->view
+  ([pattern output? remaining?]
+     (pattern->view 'fn pattern output? remaining?))
+  ([name pattern output? remaining?]
+     (let [[pattern bound-here] (pattern/with-scope pattern #{})]
+       (with-syms [input]
+         `(~name [~input]
+                 (let [~@(interleave (cons '&remaining bound-here) (repeat `(new-mutable!)))]
+                   [~(view pattern input output? remaining?) (get-remaining!)]))))))
+
+(defn graph->views [graph output? remaining?]
+  `(letfn [~@(for [[name pattern] graph] (pattern->view name pattern))]
+     ~(for-map [[name _] graph] '~name ~name)))
 
 (comment
   ((eval (pattern->view 1 true true)) 1)
@@ -225,4 +251,6 @@
   ((eval (pattern->view [1 2] true true)) [1 2 3])
   ((eval (pattern->view [1 2 (strucjure.pattern/->Rest (list 3 4))] true true)) [1 2 3 4])
   ((eval (pattern->view [1 2 (strucjure.pattern/->Rest (list 3 4))] true true)) [1 2 3 4 5])
+  ((eval (pattern->view [1 2 (strucjure.pattern/->ZeroOrMore 3)] true true)) [1 2 3 4 5])
+  ((eval (pattern->view [1 2 (strucjure.pattern/->Rest (strucjure.pattern/->ZeroOrMore 3))] true true)) [1 2 3 3 3 4 5])
   )

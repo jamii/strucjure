@@ -44,30 +44,31 @@
 ;; TODO error reporting here
 ;; TODO dont eval each time
 (defn desugar-pattern [sugar]
-  (let [desugar-view ('pattern (eval (view/graph->views desugared true true)))]
-    (if-let [[output remaining] (desugar-view sugar)]
+  (let [desugar-view (eval (view/graph->view 'pattern desugared))]
+    (let [[output remaining] (desugar-view sugar)]
       (if (nil? remaining)
         output
-        (throw (Exception. "Not a pattern")))
-      (throw (Exception. "Not a pattern")))))
+        (throw (Exception. "Not a pattern"))))))
 
 (defmacro pattern [sugar]
   (desugar-pattern sugar))
 
-(defn desugar-graph [name->sugar]
-  `(let [~@(aconcat (for [name (keys name->sugar)] [name `(->Node '~name)]))]
-     (graph/with-named-inner-nodes
-       (graph/with-named-outer-nodes
-         ~(for-map [[name sugar] name->sugar] `'~name `(pattern ~sugar))))))
+(defmacro with-nodes [names & body]
+  `(let [~@(interleave names (for [name names] `(->Node '~name)))]
+     (do ~@body)))
+
+(defn desugar-graph [names&sugars]
+  `(with-nodes [~@(take-nth 2 names&sugars)]
+     ~(for-map [[name sugar] (partition 2 names&sugars)] `'~name `(->Name '~name (pattern ~sugar)))))
 
 (defmacro graph [& names&sugars]
-  (desugar-graph (for-map [[name sugar] (partition 2 names&sugars)] name sugar)))
+  (desugar-graph names&sugars))
 
 (defmacro seqable [& sugars]
   `(->Seqable (pattern ~sugars)))
 
-(defmacro is [& f]
-  `(->Is #(~f)))
+(defmacro is [f]
+  `(->Is ~f))
 
 (defmacro guard [sugar fnk]
   `(->Guard (pattern ~sugar) ~fnk))
@@ -86,6 +87,9 @@
 
 (defmacro with-meta [sugar meta-sugar]
   `(->WithMeta (pattern ~sugar) (pattern ~meta-sugar)))
+
+(defmacro node [name]
+  `(->Node ~name))
 
 (defmacro view [sugar]
   (view/pattern->view (eval (desugar-pattern sugar)) true true))

@@ -5,12 +5,13 @@
             [strucjure.pattern :as pattern]
             [strucjure.graph :as graph])
   (:import [clojure.lang ISeq IPersistentVector IPersistentMap]
-           [strucjure.pattern Any Is Rest Guard Name ZeroOrMore WithMeta Or And Seqable Output Node Trace Binding]))
+           [strucjure.pattern Any Is Rest Guard Name ZeroOrMore WithMeta Or And Seqable Output Node Graph Trace]))
 
 ;; TODO only allowed remaining inside Rest?
 ;; TODO catch exceptions from output and guards etc
 ;; TODO optimise output
 ;; TODO optimise checks and sets
+;; TODO code review &remaining - it's bound to be wrong somewhere
 
 (defprotocol View
   (view* [this meta input output? remaining?]
@@ -21,8 +22,29 @@
      If remaining? is false, the form should fail if the pattern leaves any remaining and leave the value of &remaining unchanged."))
 
 (defn view [pattern input output? remaining?]
-  (prn 'view pattern (meta pattern))
   (view* pattern (meta pattern) input output? remaining?))
+
+(defn pattern->view
+  ([pattern output? remaining?]
+     (pattern->view 'fn pattern output? remaining?))
+  ([name pattern output? remaining?]
+     (let [[pattern bound-here] (pattern/with-bound pattern)
+           pattern (pattern/with-used pattern #{})]
+       (pattern/check-used-not-bound pattern)
+       (with-syms [input]
+         `(~name [~input]
+                 (let [~@(interleave (cons '&remaining bound-here) (repeat `(new-mutable!)))]
+                   [~(view pattern input output? remaining?) (get-remaining!)]))))))
+
+(def node-gensym
+  (gensym "node"))
+
+(defn node-name [name]
+  (symbol (str name "-" node-gensym)))
+
+(defn graph->view [name graph]
+  `(letfn [~@(for [[name pattern] graph] (pattern->view (node-name name) pattern true true))]
+     ~(node-name name)))
 
 (defn cache-input [f pattern input output? remaining?]
   (with-syms [cached-input]
@@ -118,12 +140,6 @@
       (view pattern input output? remaining?))
     (assert nil "'Or' patterns may not be empty")))
 
-(def node-gensym
-  (gensym "node"))
-
-(defn node-name [name]
-  (symbol (str name "-" node-gensym)))
-
 ;; --- VALUE PATTERNS ---
 
 (extend-protocol-by-fn
@@ -159,7 +175,7 @@
 
 (extend-protocol-by-fn
  View
- (fn view* [{:keys [pattern patterns meta-pattern fn fnk name input-fn success-fn failure-fn var value]}
+ (fn view* [{:keys [pattern patterns meta-pattern fn fnk name input-fn success-fn failure-fn var value graph]}
            {:keys [used-here]} input output? remaining?]
 
    [Any]
@@ -217,8 +233,12 @@
    [Node]
    (with-syms [output remaining]
      `(let [[~output ~remaining] (~(node-name name) ~input)]
-        ~(when remaining? `(set-remaining! ~remaining))
-        ~output))
+        (check-remaining! ~remaining? ~remaining ~output)))
+
+   [Graph]
+   (with-syms [output remaining]
+     `(let [[~output ~remaining] (~(graph->view name graph) ~input)]
+        (check-remaining! ~remaining? ~remaining ~output)))
 
    [Trace]
    `(do (~input-fn ~name ~input)
@@ -228,26 +248,7 @@
                 output#)
               (catch Exception exc#
                 (~failure-fn ~name exc#)
-                (throw exc#))))
-
-   [Binding]
-   `(binding [~var ~value] ~(view pattern input output? remaining?))))
-
-(defn pattern->view
-  ([pattern output? remaining?]
-     (pattern->view 'fn pattern output? remaining?))
-  ([name pattern output? remaining?]
-     (let [[pattern bound-here] (pattern/with-bound pattern)
-           pattern (pattern/with-used pattern #{})]
-       (pattern/check-used-not-bound pattern)
-       (with-syms [input]
-         `(~name [~input]
-                 (let [~@(interleave (cons '&remaining bound-here) (repeat `(new-mutable!)))]
-                   [~(view pattern input output? remaining?) (get-remaining!)]))))))
-
-(defn graph->views [graph output? remaining?]
-  `(letfn [~@(for [[name pattern] graph] (pattern->view (node-name name) pattern output? remaining?))]
-     ~(for-map [[name _] graph] `'~name (node-name name))))
+                (throw exc#))))))
 
 (comment
   ((eval (pattern->view 1 true true)) 1)

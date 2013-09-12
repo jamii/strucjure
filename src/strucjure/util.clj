@@ -29,7 +29,6 @@
                                       [classes body] (partition 2 classes&bodies)
                                       class classes]
                                   {class #{(list fn-name fn-args body)}}))]
-    (print class->fns)
     `(extend-protocol ~protocol
        ~@(aconcat (for [[class fns] class->fns] (cons class fns))))))
 

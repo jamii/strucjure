@@ -1,30 +1,20 @@
 (ns strucjure)
 
 ;; --- STACK ---
-;; recover tracing on graphs
+;; replace view with: validate, parse, match, (pre/post)walk, get-in
+;; figure out how to treat graphs as patterns (s/node-of ...)
 
 ;; --- TODO ---
 ;; README - http://hugoduncan.org/post/evaluate_clojure_in_emacs_markdown_buffers/ or similar
 ;; tests (string in regression, readme, bootstrap, generative)
 ;; use wolfes trick for closures. for lexically scoped parts, just add dependency in fnk and don't check it in Output
-
-;; --- ERRORS ---
-;; first error? deepest error?
-;;   if all same depth as Or, report the Or
-
-;; --- OPTIMISATIONS ---
-;; check if output unchanged in patterns - maybe rethink how output/bindings are passed
-;; should Output check output?
+;; optimisations in view
+;; error reporting - deepest-error in graph, maybe first-error in pattern
+;; Input pattern for prewalks
+;; license?
 
 ;; --- LATER ---
-;; extensible, multi-pass compiler - stop trying to fit everything into pattern->clj
-;; consider separating output from patterns - makes closures much easier (what about guard? and is?)
-;; error reporting - deepest-error in graph, maybe first-error in pattern
 ;; for prewalks can just build ast by attaching name and bindings in metadata
-;; clumsiness in trace-pattern comes from using CPS for ->And in the compiler
-;;   could use CPS in graph compiler too - would help with trampolining too
-;;   wait until we have benchmarks though
-;; use tuple or deftype for result?
 ;; need to be able to alter views (store original pattern in meta and have pattern/alter and graph/alter)
 ;; cut by returning delay - can trampoline to the nearest try - needs work inside Or/ZeroOrMore
 ;; gens
@@ -52,25 +42,6 @@
 ;; --- MOTIVATION ---
 ;; types vs data
 ;; use :refer-all as example
-(comment
-  (:require [strucjure.raw :as r]
-            [strucjure.sugar :as s])
-
-  ;; sugar
-  (def ns
-    (s/graph
-     ns (ns ~symbol & * ~clause)
-     symbol ~(s/is symbol? %)
-     clause ~(s/or ~refer ~use)
-     use (:use + ~libspec)
-     require (:require + ~libspec)
-     libspec ~(s/or ~prefix + ~lib)
-     prefix [~symbol + ~lib]
-     lib ~(s/or ~symbol [~symbol & * ~option])
-     option ~(s/or ~as ~refer)
-     as (:as ~symbol)
-     refer (:refer [& + ~symbol])))
-)
 
 (comment
   (def ot (pattern (1 2)))

@@ -7,7 +7,6 @@
 (pattern->view (->Name 'a 1) true true)
 (bound (->Name 'a 1))
 (used (->Output (->Name 'a 1) (fnk [a] (+ a 1))))
-(with-scope (->Output (->Name 'a 1) (fnk [a] (+ a 1))) #{})
 ((eval (pattern->view (->Output (->Name 'a 1) (fnk [a] (+ a 1))) true true)) 1)
 ((eval (pattern->view (->Output (->Name 'a 1) (fnk [a] (+ a 1))) true true)) 2)
 (pattern->view (list 1 2) true true)
@@ -98,4 +97,3 @@
 (macroexpand-1 '(trace [1 2 3]))
 ((trace [1 2 3]) [1 2 3])
 ((trace ~(or {:1 2 :3 [4 5]} {:1 2})) {:1 2 :3 [3 5]})
-((eval (graph->view 'num (strucjure.debug/graph-with-print-trace num-out))) '(succ (succ zero)))

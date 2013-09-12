@@ -15,7 +15,7 @@
 (defn repeatable* [form]
   (cond
    (fn? form) ::fn
-   (and (symbol? form) (re-find #"(\d|__auto__)$" (str form))) ::gensym
+   (and (symbol? form) (re-find #"(\d#?|__auto__)$" (str form))) ::gensym
    (var? form) (do (alter-meta! form dissoc :line :column) form) ;; I don't know why these differ :(
    :else form))
 
@@ -27,7 +27,7 @@
 (defn eval-test [test]
   (binding [*ns* (find-ns 'strucjure.regression.sandbox)
             *print-meta* true]
-    (pr-str (repeatable (eval test)))))
+    (pr-str (repeatable (eval `(try ~test (catch Throwable e# e#)))))))
 
 (defn reset-results []
   (binding [*print-meta* true]
@@ -43,4 +43,4 @@
         recorded-results (line-seq (clojure.java.io/reader recorded-results-file))]
     (doseq [[test result] (map vector recorded-tests recorded-results)]
       (is (= (eval-test test) result) test))
-    (is (= tests recorded-tests) "Tests should not have been changed since last (reset-results)")))
+    (is (= (map repeatable tests) (map repeatable recorded-tests)) "Tests should not have been changed since last (reset-results)")))

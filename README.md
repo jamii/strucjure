@@ -8,11 +8,11 @@ The last stable version of strucjure is [https://github.com/jamii/strucjure/rele
 
 ## Quickstart
 
-```clojure
+``` clojure
 [strucjure "0.4.0-SNAPSHOT"]
 ```
 
-```clojure
+``` clojure
 user> (require '[strucjure.pattern :as p]
                '[strucjure.graph :as g]
                '[strucjure.sugar :as s]
@@ -22,7 +22,7 @@ nil
 
 Let's define a grammar for peano numbers.
 
-```
+``` clojure
 user> (def peano-graph
            (s/graph num ~(s/or ~succ ~zero)
                     succ (succ ~num)
@@ -40,7 +40,7 @@ Exception Match failed  sun.reflect.NativeConstructorAccessorImpl.newInstance0 (
 
 Views can do more than just validate grammars. We can also express transformations.
 
-```
+``` clojure
 user> (def peano->int-graph
            (g/output-in peano-graph
                         'succ (fnk [num] (inc num))
@@ -58,7 +58,7 @@ Exception Match failed  sun.reflect.NativeConstructorAccessorImpl.newInstance0 (
 
 Or inject debugging code.
 
-```
+``` clojure
 user> (def trace-peano (s/view ~(s/node-of (strucjure.debug/graph-with-trace peano-graph) 'num)))
 #'user/trace-peano
 user> (trace-peano '(succ (succ succ)))
@@ -109,8 +109,14 @@ user> (s/match '(succ zero)
                (succ zero) :ok)
 :ok
 user> (s/match '(succ zero)
+               (succ ^something _) something)
+zero
+user> (s/match '(succ zero)
                ~peano-num :ok)
 :ok
+user> (s/match '(succ zero)
+               ^num ~peano-num num)
+1
 user> (s/match [1 2 '(succ (succ (succ zero))) 4 5]
                {:x 1 :y 2} :not-a-map
                (1 2 '(succ (succ zero)) 4 5) :not-a-seq
@@ -118,7 +124,6 @@ user> (s/match [1 2 '(succ (succ (succ zero))) 4 5]
                [1 2 ~(s/as ~peano-num 3) 4 5] :just-right)
 :just-right
 ```
-
 
 ## Limitations
 

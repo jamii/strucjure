@@ -1,6 +1,7 @@
 (ns strucjure)
 
 ;; --- TODO ---
+;; could only do escaping inside quoting - knackers underscore though
 ;; use wolfes trick for closures. for lexically scoped parts, just add dependency in fnk and don't check it in Output
 ;; README - http://hugoduncan.org/post/evaluate_clojure_in_emacs_markdown_buffers/ or similar
 ;; tests (string in regression, readme, bootstrap, generative)

@@ -5,7 +5,7 @@
             [strucjure.pattern :as pattern]
             [strucjure.graph :as graph])
   (:import [clojure.lang ISeq IPersistentVector IPersistentMap]
-           [strucjure.pattern Any Is Rest Guard Name ZeroOrMore WithMeta Or And Seqable Output Node NodeOf Trace]))
+           [strucjure.pattern Any Is Rest Guard Name ZeroOrMore WithMeta Or And Seqable Output As Node NodeOf Trace]))
 
 ;; TODO only allowed remaining inside Rest?
 ;; TODO catch exceptions from output and guards etc
@@ -131,6 +131,13 @@
       (view pattern input output? remaining?))
     (assert nil "'Or' patterns may not be empty")))
 
+(defn as->view [patterns input output? remaining?]
+  (if-let [[pattern & patterns] (seq patterns)]
+    (if patterns
+      (cache-input as->view patterns (view pattern input output? remaining?) output? remaining?)
+      (view pattern input output? remaining?))
+    (assert nil "'Or' patterns may not be empty")))
+
 (def node-gensym
   (gensym "node"))
 
@@ -230,6 +237,9 @@
    [Output]
    `(do ~(view pattern input false remaining?)
         (call-fnk ~fnk))
+
+   [As]
+   (as->view patterns input output? remaining?)
 
    [Node]
    (with-syms [output remaining]

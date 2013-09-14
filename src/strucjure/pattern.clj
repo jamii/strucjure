@@ -28,6 +28,7 @@
 ;; pseudo-patterns
 (defrecord Rest [pattern])
 (defrecord Output [pattern fnk])
+(defrecord As [patterns])
 (defrecord Node [name])
 (defrecord NodeOf [graph name])
 (defrecord Trace [pattern name input-fn success-fn failure-fn])
@@ -41,7 +42,7 @@
    [IPersistentMap] (vals this)
    [Rest Guard Output Name ZeroOrMore Trace] [(:pattern this)]
    [WithMeta] [(:pattern this) (:meta-pattern this)]
-   [Or And Seqable] (:patterns this))
+   [Or And Seqable As] (:patterns this))
 
  (fn with-subpatterns [this subpatterns]
    [nil Object Any Is Node NodeOf] this
@@ -50,14 +51,14 @@
    [IPersistentMap] (zipmap (keys this) subpatterns)
    [Rest Guard Output Name ZeroOrMore Trace] (assoc this :pattern (first subpatterns))
    [WithMeta] (assoc this :pattern (first subpatterns) :meta-pattern (second subpatterns))
-   [Or And Seqable] (assoc this :patterns subpatterns))
+   [Or And Seqable As] (assoc this :patterns subpatterns))
 
  (fn used [this]
-   [nil Object ISeq IPersistentVector IPersistentMap Any Is Rest Name ZeroOrMore WithMeta Or And Seqable Trace Node NodeOf] #{}
+   [nil Object ISeq IPersistentVector IPersistentMap Any Is Rest Name ZeroOrMore WithMeta Or And Seqable Trace Node NodeOf As] #{}
    [Guard Output] (set (fnk->args (:fnk this))))
 
  (fn bound [this]
-   [nil Object ISeq IPersistentVector IPersistentMap Any Is Rest Guard Output ZeroOrMore WithMeta Or And Seqable Trace Node NodeOf] #{}
+   [nil Object ISeq IPersistentVector IPersistentMap Any Is Rest Guard Output ZeroOrMore WithMeta Or And Seqable Trace Node NodeOf As] #{}
    [Name] #{(:name this)}))
 
 (defn fmap [pattern f]

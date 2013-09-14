@@ -2,7 +2,7 @@
   (:refer-clojure :exclude [with-meta * or and])
   (:require [plumbing.core :refer [fnk for-map aconcat]]
             [strucjure.util :refer [with-syms]]
-            [strucjure.pattern :as pattern :refer [->Rest ->Seqable ->Any ->Is ->Guard ->Name ->Output ->Or ->And ->ZeroOrMore ->WithMeta ->Node ->NodeOf]]
+            [strucjure.pattern :as pattern :refer [->Rest ->Seqable ->Any ->Is ->Guard ->Name ->Output ->As ->Or ->And ->ZeroOrMore ->WithMeta ->Node ->NodeOf]]
             [strucjure.graph :as graph]
             [strucjure.debug :as debug]
             [strucjure.view :as view]))
@@ -58,8 +58,10 @@
      (do ~@body)))
 
 (defn desugar-graph [names&sugars]
-  `(with-nodes [~@(take-nth 2 names&sugars)]
-     ~(for-map [[name sugar] (partition 2 names&sugars)] `'~name `(->Name '~name (pattern ~sugar)))))
+  `(graph/with-named-inner-nodes
+     (graph/with-named-outer-nodes
+       `(with-nodes [~@(take-nth 2 names&sugars)]
+          ~(for-map [[name sugar] (partition 2 names&sugars)] `'~name `(pattern ~sugar))))))
 
 (defmacro graph [& names&sugars]
   (desugar-graph names&sugars))
@@ -75,6 +77,9 @@
 
 (defmacro output [sugar fnk]
   `(->Output (pattern ~sugar) ~fnk))
+
+(defmacro as [& sugars]
+  `(->As [~@(for [sugar sugars] `(pattern ~sugar))]))
 
 (defmacro or [& sugars]
   `(->Or [~@(for [sugar sugars] `(pattern ~sugar))]))

@@ -2,6 +2,10 @@
 
 Strucjure is a library for doing stuff to other stuff. You provide a declarative grammar for your stuff and strucjure gives you validators, parsers, walks and lenses (and eventually generators).
 
+## Note
+
+The last stable version of strucjure is [https://github.com/jamii/strucjure/releases/tag/v0.3.5]. This readme refers to the version currently in development.
+
 ## Quickstart
 
 ```clojure

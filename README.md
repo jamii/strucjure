@@ -1,10 +1,27 @@
 ["At some point as a programmer you might have the insight/fear that all programming is just doing stuff to other stuff."](http://highscalability.com/blog/2013/2/14/when-all-the-programs-a-graph-prismatics-plumbing-library.html)
 
-Strucjure is a library for doing stuff to other stuff. You provide a declarative grammar for your stuff and strucjure gives you validators, parsers, walks and lenses (and eventually generators).
+In idiomatic clojure data is not hidden behind classes and methods, but instead left lying around in a homogenous heap of stuff. Assumptions about the shape of stuff are implicitly encoded in the functions used to operate on it. When your stuff is the wrong shape things blow up far down the line in an unhelpful fashion.
+
+``` clojure
+user> (doc ns)
+-------------------------
+clojure.core/ns
+([name docstring? attr-map? references*])
+...
+user> (ns foo
+        (:require [bar :refer-all]))
+IllegalArgumentException No value supplied for key: true  clojure.lang.PersistentHashMap.create (PersistentHashMap.java:77)
+```
+
+Strucjure is a library for describing stuff in an executable manner. You provide a declarative grammar for your stuff and strucjure gives you pattern matching, validators, parsers, walks and lenses (and eventually generators). The shape of your data is immediately apparent from your code and errors are clearly reported.
+
+``` clojure
+;; TODO new ns example in here :)
+```
 
 ## Note
 
-The last stable version of strucjure is [https://github.com/jamii/strucjure/releases/tag/v0.3.5]. This readme refers to the version currently in development.
+The last stable version of strucjure is [https://github.com/jamii/strucjure/releases/tag/v0.3.5]. This readme refers to the version currently in development. Here be dragons...
 
 ## Quickstart
 

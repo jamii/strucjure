@@ -5,12 +5,13 @@
             [strucjure.pattern :as pattern]
             [strucjure.graph :as graph])
   (:import [clojure.lang ISeq IPersistentVector IPersistentMap]
-           [strucjure.pattern Any Is Rest Guard Name ZeroOrMore WithMeta Or And Seqable Output Node Graph Trace]))
+           [strucjure.pattern Any Is Rest Guard Name ZeroOrMore WithMeta Or And Seqable Output Node NodeOf Trace]))
 
 ;; TODO only allowed remaining inside Rest?
 ;; TODO catch exceptions from output and guards etc
 ;; TODO optimise output
 ;; TODO optimise checks and sets
+;; TODO when input is unchanged just return input, no need to allocate
 ;; TODO code review &remaining - it's bound to be wrong somewhere
 
 (defprotocol View
@@ -35,16 +36,6 @@
          `(~name [~input]
                  (let [~@(interleave (cons '&remaining bound-here) (repeat `(new-mutable!)))]
                    [~(view pattern input output? remaining?) (get-remaining!)]))))))
-
-(def node-gensym
-  (gensym "node"))
-
-(defn node-name [name]
-  (symbol (str name "-" node-gensym)))
-
-(defn graph->view [name graph]
-  `(letfn [~@(for [[name pattern] graph] (pattern->view (node-name name) pattern true true))]
-     ~(node-name name)))
 
 (defn cache-input [f pattern input output? remaining?]
   (with-syms [cached-input]
@@ -139,6 +130,16 @@
                     ~(or->view patterns input output? remaining?)))
       (view pattern input output? remaining?))
     (assert nil "'Or' patterns may not be empty")))
+
+(def node-gensym
+  (gensym "node"))
+
+(defn node-name [name]
+  (symbol (str name "-" node-gensym)))
+
+(defn graph->view [name graph]
+  `(letfn [~@(for [[name pattern] graph] (pattern->view (node-name name) pattern true true))]
+     ~(node-name name)))
 
 ;; --- VALUE PATTERNS ---
 
@@ -235,7 +236,7 @@
      `(let [[~output ~remaining] (~(node-name name) ~input)]
         (check-remaining! ~remaining? ~remaining ~output)))
 
-   [Graph]
+   [NodeOf]
    (with-syms [output remaining]
      `(let [[~output ~remaining] (~(graph->view name graph) ~input)]
         (check-remaining! ~remaining? ~remaining ~output)))
@@ -249,17 +250,3 @@
               (catch Exception exc#
                 (~failure-fn ~name exc#)
                 (throw exc#))))))
-
-(comment
-  ((eval (pattern->view 1 true true)) 1)
-  ((eval (pattern->view [] true true)) [1])
-  ((eval (pattern->view [] true false)) [1])
-  ((eval (pattern->view [1 2] true false)) [1])
-  ((eval (pattern->view [1 2] true false)) [1 2])
-  ((eval (pattern->view [1 2] true false)) [1 2 3])
-  ((eval (pattern->view [1 2] true true)) [1 2 3])
-  ((eval (pattern->view [1 2 (strucjure.pattern/->Rest (list 3 4))] true true)) [1 2 3 4])
-  ((eval (pattern->view [1 2 (strucjure.pattern/->Rest (list 3 4))] true true)) [1 2 3 4 5])
-  ((eval (pattern->view [1 2 (strucjure.pattern/->ZeroOrMore 3)] true true)) [1 2 3 4 5])
-  ((eval (pattern->view [1 2 (strucjure.pattern/->Rest (strucjure.pattern/->ZeroOrMore 3))] true true)) [1 2 3 3 3 4 5])
-  )

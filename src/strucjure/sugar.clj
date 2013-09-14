@@ -2,7 +2,7 @@
   (:refer-clojure :exclude [with-meta * or and])
   (:require [plumbing.core :refer [fnk for-map aconcat]]
             [strucjure.util :refer [with-syms]]
-            [strucjure.pattern :as pattern :refer [->Rest ->Seqable ->Any ->Is ->Guard ->Name ->Output ->Or ->And ->ZeroOrMore ->WithMeta ->Node]]
+            [strucjure.pattern :as pattern :refer [->Rest ->Seqable ->Any ->Is ->Guard ->Name ->Output ->Or ->And ->ZeroOrMore ->WithMeta ->Node ->NodeOf]]
             [strucjure.graph :as graph]
             [strucjure.debug :as debug]
             [strucjure.view :as view]))
@@ -91,8 +91,19 @@
 (defmacro node [name]
   `(->Node ~name))
 
+(defmacro node-of [graph name]
+  `(->NodeOf ~graph ~name))
+
 (defmacro view [sugar]
   (view/pattern->view (eval (desugar-pattern sugar)) true true))
 
 (defmacro trace [sugar]
   (view/pattern->view (debug/pattern-with-trace (eval (desugar-pattern sugar))) true true))
+
+(defmacro match [input & sugars&outputs]
+  (let [pattern (->Or (vec (for [[sugar output] (partition 2 sugars&outputs)]
+                              (let [pattern (eval (desugar-pattern sugar))
+                                    [_ bound] (pattern/with-bound pattern)]
+                                (->Output pattern (eval `(fnk [~@bound] ~output)))))))]
+    `(let [[output# remaining#] (~(view/pattern->view pattern true false) ~input)]
+       output#)))

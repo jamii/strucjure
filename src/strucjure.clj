@@ -1,19 +1,16 @@
 (ns strucjure)
 
-;; --- STACK ---
-;; replace view with: validate, parse, match, (pre/post)walk, get-in
-;; figure out how to treat graphs as patterns (s/node-of ...)
-
 ;; --- TODO ---
+;; use wolfes trick for closures. for lexically scoped parts, just add dependency in fnk and don't check it in Output
 ;; README - http://hugoduncan.org/post/evaluate_clojure_in_emacs_markdown_buffers/ or similar
 ;; tests (string in regression, readme, bootstrap, generative)
-;; use wolfes trick for closures. for lexically scoped parts, just add dependency in fnk and don't check it in Output
 ;; optimisations in view
 ;; error reporting - deepest-error in graph, maybe first-error in pattern
-;; Input pattern for prewalks
+;; Input pattern for prewalks?
 ;; license?
 
 ;; --- LATER ---
+;; having both patterns and views is awkward - try to unify
 ;; for prewalks can just build ast by attaching name and bindings in metadata
 ;; need to be able to alter views (store original pattern in meta and have pattern/alter and graph/alter)
 ;; cut by returning delay - can trampoline to the nearest try - needs work inside Or/ZeroOrMore

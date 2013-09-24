@@ -2,12 +2,16 @@
   (:refer-clojure :exclude [with-meta * or and])
   (:require [plumbing.core :refer [fnk for-map aconcat]]
             [strucjure.util :refer [with-syms]]
-            [strucjure.pattern :as pattern :refer [->Rest ->Seqable ->Any ->Is ->Guard ->Name ->Output ->As ->Or ->And ->ZeroOrMore ->WithMeta ->Node ->NodeOf]]
+            [strucjure.pattern :as pattern :refer [->Rest ->Seqable ->Any ->Is ->Guard ->Name ->Output ->As ->Or ->And ->Repeated ->WithMeta ->Node ->NodeOf]]
             [strucjure.graph :as graph]
             [strucjure.debug :as debug]
             [strucjure.view :as view]))
 
 ;; TODO wrapping parser/rest in [] and calling first (elem) is ugly
+
+(defn zero-or-more [pattern] (->Repeated nil nil pattern))
+(defn one-or-more [pattern] (->Repeated 1 nil pattern))
+(defn zero-or-one [pattern] (->Repeated nil 1 pattern))
 
 (def sugared
   (letfn [(bindable [pattern] (->WithMeta pattern (->Or [{:tag (->Node 'binding)} (->Any)])))]
@@ -15,17 +19,19 @@
      'unquote (list `unquote (->Name 'unquoted (->Any)))
      'seq (list (->Rest (->Node 'elems)))
      'vec (vector (->Rest (->Node 'elems)))
-     'elems (->ZeroOrMore (->Rest (->Node 'elem)))
+     'elems (zero-or-more (->Rest (->Node 'elem)))
      'elem (->Or [(->Node 'parser) (->Node 'rest) (list (->Node 'pattern))])
-     'parser (list (bindable (->Name 'prefix (->Or ['*]))) (->Rest (->Node 'elem))) ;; TODO + ?
+     'parser (list (bindable (->Name 'prefix (->Or ['* '+ '?]))) (->Rest (->Node 'elem)))
      'rest (list (bindable (->Name 'prefix '&)) (->Rest (->Node 'elem)))
-     'map (->And [{} (->Name 'elems (->Seqable [(->Rest (->ZeroOrMore [(->Any) (->Node 'pattern)]))]))]) ;; TODO make s/hashmap for this pattern
+     'map (->And [{} (->Name 'elems (->Seqable [(->Rest (zero-or-more [(->Any) (->Node 'pattern)]))]))]) ;; TODO make s/hashmap for this pattern
      'binding (->Is #(symbol? %))
      'any '_
      'default (->Any)}))
 
 (def prefixes
-  {'* 'strucjure.pattern/->ZeroOrMore})
+  {'* `zero-or-more
+   '+ `one-or-more
+   '? `zero-or-one})
 
 (def desugared
   (graph/output-in (graph/with-named-inner-nodes (graph/with-named-outer-nodes sugared))
@@ -60,8 +66,8 @@
 (defn desugar-graph [names&sugars]
   `(graph/with-named-inner-nodes
      (graph/with-named-outer-nodes
-       `(with-nodes [~@(take-nth 2 names&sugars)]
-          ~(for-map [[name sugar] (partition 2 names&sugars)] `'~name `(pattern ~sugar))))))
+       (with-nodes [~@(take-nth 2 names&sugars)]
+         ~(for-map [[name sugar] (partition 2 names&sugars)] `'~name `(pattern ~sugar))))))
 
 (defmacro graph [& names&sugars]
   (desugar-graph names&sugars))
@@ -88,7 +94,13 @@
   `(->And [~@(for [sugar sugars] `(pattern ~sugar))]))
 
 (defmacro * [sugar]
-  `(->ZeroOrMore (pattern ~sugar)))
+  `(->Repeated nil nil (pattern ~sugar)))
+
+(defmacro + [sugar]
+  `(->Repeated 1 nil (pattern ~sugar)))
+
+(defmacro ? [sugar]
+  `(->Repeated nil 1 (pattern ~sugar)))
 
 (defmacro with-meta [sugar meta-sugar]
   `(->WithMeta (pattern ~sugar) (pattern ~meta-sugar)))

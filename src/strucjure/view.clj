@@ -5,7 +5,7 @@
             [strucjure.pattern :as pattern]
             [strucjure.graph :as graph])
   (:import [clojure.lang ISeq IPersistentVector IPersistentMap]
-           [strucjure.pattern Any Is Rest Guard Name ZeroOrMore WithMeta Or And Seqable Output As Node NodeOf Trace]))
+           [strucjure.pattern Any Is Rest Guard Name Repeated WithMeta Or And Seqable Output As Node NodeOf Trace]))
 
 ;; TODO only allowed remaining inside Rest?
 ;; TODO catch exceptions from output and guards etc
@@ -183,7 +183,7 @@
 
 (extend-protocol-by-fn
  View
- (fn view* [{:keys [pattern patterns meta-pattern fn fnk name input-fn success-fn failure-fn var value graph]}
+ (fn view* [{:keys [pattern patterns meta-pattern fn fnk name input-fn success-fn failure-fn var value graph min-count max-count]}
            {:keys [used-here]} input output? remaining?]
 
    [Any]
@@ -203,23 +203,30 @@
         ~(when (used-here name) `(set-mutable! ~name ~output))
         ~output))
 
-   [ZeroOrMore]
-   (with-syms [loop-input loop-output result]
+   [Repeated]
+   (with-syms [loop-input loop-output loop-count result]
      (let [body (if (instance? Rest pattern)
                   (view (:pattern pattern) loop-input output? true)
                   (head->view pattern loop-input output? false))
            recur (if (instance? Rest pattern)
-                   `(recur (swap-remaining! nil) (into ~loop-output ~result))
-                   `(recur (next ~loop-input) (conj ~loop-output ~result)))
-           reset-remaining (when (instance? Rest pattern) `(set-remaining! nil))]
+                   `(recur (swap-remaining! nil) (into ~loop-output ~result) (inc ~loop-count))
+                   `(recur (next ~loop-input) (conj ~loop-output ~result) (inc ~loop-count)))
+           return `(do ~(when (instance? Rest pattern) `(set-remaining! nil))
+                       (check-remaining! ~remaining? ~loop-input (seq ~loop-output)))
+           max-check&body (if max-count
+                            `(check (< ~loop-count ~max-count) ~body)
+                            body)
+           min-check&return (if min-count
+                              `(check (>= ~loop-count ~min-count) ~return)
+                              return)]
 
        `(check (or (nil? ~input) (instance? clojure.lang.Seqable ~input))
                (loop [~loop-input (seq ~input)
-                      ~loop-output []]
-                 (let [~result (on-fail ~body failure)]
+                      ~loop-output []
+                      ~loop-count 0]
+                 (let [~result (on-fail ~max-check&body failure)]
                    (if (failure? ~result)
-                     (do ~reset-remaining
-                         (check-remaining! ~remaining? ~loop-input (seq ~loop-output)))
+                     ~min-check&return
                      ~recur))))))
 
    [WithMeta]

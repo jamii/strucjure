@@ -12,11 +12,6 @@
     #{(:name pattern)}
     (union (map dependencies (pattern/subpatterns pattern)))))
 
-(defn output-in [graph & names&fnks]
-  (apply assoc graph
-         (aconcat (for [[name fnk] (partition 2 names&fnks)]
-                    [name (pattern/->Output (graph name) fnk)]))))
-
 (defn named-node [pattern]
   (if (instance? strucjure.pattern.Node pattern)
     (pattern/->Name (:name pattern) pattern)

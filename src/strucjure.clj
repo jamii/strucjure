@@ -1,7 +1,7 @@
 (ns strucjure)
 
 ;; --- TODO ---
-;; could only do escaping inside quoting - knackers underscore though
+;; finish ns example
 ;; use wolfes trick for closures. for lexically scoped parts, just add dependency in fnk and don't check it in Output
 ;; README - http://hugoduncan.org/post/evaluate_clojure_in_emacs_markdown_buffers/ or similar
 ;; tests (string in regression, readme, bootstrap, generative)
@@ -10,7 +10,17 @@
 ;; Input pattern for prewalks?
 ;; license?
 
+;; --- SKETCH ---
+;; if not output? return input instead (and then look for Output in children)
+;; pseudo-patterns should use callback in view compiler
+;; could import graphs using nested names eg :require:libspec
+;; the problem with ns-grammer is not a bug - its a semantics problem...
+;;   could be fixed in this case with (or option libspec)
+;;   but is confusing and broken in general
+;;   at minimum need to be able to push context down into nodes
+
 ;; --- LATER ---
+;; switch to fn-based staging compiler - are the extra stack frames going to be a problem?
 ;; having both patterns and views is awkward - try to unify
 ;; for prewalks can just build ast by attaching name and bindings in metadata
 ;; need to be able to alter views (store original pattern in meta and have pattern/alter and graph/alter)
@@ -36,9 +46,11 @@
 ;; would be hugely useful to be able to embed arbitrary data structures in code before eval
 ;; getting binding right is hard. parsec et al solve this by just not doing it
 ;; write down thinking to avoid going in circles
+;; benchmark as soon as possible
 
 ;; --- MOTIVATION ---
 ;; types vs data
+;; correct-by-construction as opposed to analysing ad-hoc code
 ;; use :refer-all as example
 
 (comment
@@ -57,3 +69,35 @@
 ;; two nonterminals, selected in accordance with Amdahl’s law, can some-
 ;; times yield speedups. We present experimental evidence to support these
 ;; claims.'
+
+(require '[strucjure.pattern :as p]
+         '[strucjure.graph :as g]
+         '[strucjure.sugar :as s]
+         '[plumbing.core :refer [fnk]])
+
+(def ns-grammar
+  (s/graph
+   ns (ns ^name ~symbol & ? ~docstring & ? ~attr-map & * ~reference)
+   docstring ~(s/is string?)
+   attr-map ~(s/is map?)
+   reference ~(s/or ~require ~import)
+   require (:require & * ~libspec)
+   libspec ~(s/or ~symbol
+                  [^prefix ~symbol & * ~libspec]
+                  [~symbol & * & ~option])
+   option ~(s/or (:as ~symbol)
+                 (:refer ~(s/or :all [& * ~symbol]))
+                 (:reload)
+                 (:reload-all)
+                 (:verbose))
+   import (:import & * [~symbol & * ~symbol])
+   symbol ~(s/is symbol?)))
+
+(def ns-validate
+  (s/view ~(s/node-of ns-grammar 'ns)))
+
+(ns-validate '(ns foo))
+
+(ns-validate '(ns foo (:require bar)))
+
+(ns-validate '(ns foo (:require [bar :refer :all])))

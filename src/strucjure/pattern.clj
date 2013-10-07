@@ -16,7 +16,7 @@
 
 ;; patterns
 (defrecord Any [])
-(defrecord Is [fn])
+(defrecord Is [f])
 (defrecord Guard [pattern fnk])
 (defrecord Name [name pattern])
 (defrecord Repeated [min-count max-count pattern])
@@ -24,14 +24,11 @@
 (defrecord Or [patterns])
 (defrecord And [patterns])
 (defrecord Seqable [patterns])
+(defrecord NodeOf [graph name])
 
 ;; pseudo-patterns
 (defrecord Rest [pattern])
-(defrecord Output [pattern fnk])
-(defrecord As [patterns])
 (defrecord Node [name])
-(defrecord NodeOf [graph name])
-(defrecord Trace [pattern name input-fn success-fn failure-fn])
 
 (extend-protocol-by-fn
  Pattern
@@ -40,25 +37,25 @@
    [nil Object Any Is Node NodeOf] nil
    [ISeq IPersistentVector] this
    [IPersistentMap] (vals this)
-   [Rest Guard Output Name Repeated Trace] [(:pattern this)]
+   [Rest Guard Name Repeated] [(:pattern this)]
    [WithMeta] [(:pattern this) (:meta-pattern this)]
-   [Or And Seqable As] (:patterns this))
+   [Or And Seqable] (:patterns this))
 
  (fn with-subpatterns [this subpatterns]
    [nil Object Any Is Node NodeOf] this
    [ISeq] (apply list subpatterns)
    [IPersistentVector] (vec subpatterns)
    [IPersistentMap] (zipmap (keys this) subpatterns)
-   [Rest Guard Output Name Repeated Trace] (assoc this :pattern (first subpatterns))
+   [Rest Guard Name Repeated] (assoc this :pattern (first subpatterns))
    [WithMeta] (assoc this :pattern (first subpatterns) :meta-pattern (second subpatterns))
-   [Or And Seqable As] (assoc this :patterns subpatterns))
+   [Or And Seqable] (assoc this :patterns subpatterns))
 
  (fn used [this]
-   [nil Object ISeq IPersistentVector IPersistentMap Any Is Rest Name Repeated WithMeta Or And Seqable Trace Node NodeOf As] #{}
-   [Guard Output] (set (fnk->args (:fnk this))))
+   [nil Object ISeq IPersistentVector IPersistentMap Any Is Rest Name Repeated WithMeta Or And Seqable Node NodeOf] #{}
+   [Guard] (set (fnk->args (:fnk this))))
 
  (fn bound [this]
-   [nil Object ISeq IPersistentVector IPersistentMap Any Is Rest Guard Output Repeated WithMeta Or And Seqable Trace Node NodeOf As] #{}
+   [nil Object ISeq IPersistentVector IPersistentMap Any Is Rest Guard Repeated WithMeta Or And Seqable Node NodeOf] #{}
    [Name] #{(:name this)}))
 
 (defn fmap [pattern f]

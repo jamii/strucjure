@@ -123,6 +123,4 @@
 ((view-with [] (pattern [& * 1 & ? 2 3])) [1 1 1 3])
 ((view-with [] (pattern [& * 1 & ? 2 3])) [1 1 1 2 2 3])
 ((view-with [] (pattern [& * 1  & ? 2  3])) [1 1 1])
-
-
-((view-with [trace-all] (pattern [& * 1  & ? 2  3])) [1 1 1])
+(with-layers [trace-all] ((*view* (pattern [& * 1  & ? 2  3])) [1 1 1 3]))

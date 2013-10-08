@@ -29,9 +29,7 @@
              sub-view (*view* pattern info)
              env-length (count (:name->pos info))]
          (fn [input]
-           (let [remaining (new proteus.Containers$O nil) ;; (new-remaining!)
-                 env (object-array env-length)]
-             (sub-view input remaining env)))))
+           (sub-view input nil (object-array env-length)))))
     ([pattern info] ;; recursive call
        (view pattern info))))
 
@@ -285,6 +283,8 @@
        (binding [*view* ~new-view]
          ~@body))))
 
+;; --- OUTPUT ---
+
 (defn with-output-at [class name->fnk]
   (fn
     ([old-view pattern]
@@ -298,9 +298,23 @@
              (fnk-call env)))
          (old-view pattern info)))))
 
-;; --- TRACING ---
+;; --- DEPTH ---
 
 (def ^:dynamic *depth*)
+
+(defn with-depth
+  ([old-view pattern]
+     (let [f (old-view pattern)]
+       (fn [input]
+         (binding [*depth* 0]
+           (f input)))))
+  ([old-view pattern info]
+     (let [f (old-view pattern info)]
+       (fn [input remaining env]
+         (binding [*depth* (inc *depth*)]
+           (f input remaining env))))))
+
+;; --- TRACING ---
 
 (defn- indent [n]
   (apply str (repeat (* 4 n) " ")))
@@ -309,29 +323,52 @@
   (fn [input remaining env]
     (println (indent *depth*) "=>" name input)
     (try
-      (let [output (binding [*depth* (inc *depth*)] (f input remaining env))]
+      (let [output (f input remaining env)]
         (println (indent *depth*) "<=" name output (when remaining (get-remaining! remaining)))
         output)
-      (catch strucjure.view.Failure failure
+      (catch Failure failure
         (println (indent *depth*) "X" name (str failure))
         (throw failure)))))
 
 (defn trace-all
   ([old-view pattern]
-     (let [f (old-view pattern)]
-       (fn [input]
-         (binding [*depth* 0]
-           (f input)))))
+     (old-view pattern))
   ([old-view pattern info]
      (wrap-with-trace (old-view pattern info) (pr-str pattern))))
 
 (defn trace-nodes
   ([old-view pattern]
+     (old-view pattern))
+  ([old-view pattern info]
+     (if (instance? Node pattern)
+       (wrap-with-trace (old-view pattern info) (:name pattern))
+       (old-view pattern info))))
+
+;; --- DEEPEST FAILURE ---
+
+(def ^:dynamic *deepest-depth*)
+(def ^:dynamic *deepest-failure*)
+
+(defn with-deepest-failure
+  ([old-view pattern]
      (let [f (old-view pattern)]
        (fn [input]
-         (binding [*depth* 0]
-           (f input)))))
-  ([restview pattern info]
-     (if (instance? Node pattern)
-       (wrap-with-trace (restview pattern info) (:name pattern))
-       (restview pattern info))))
+         (binding [*deepest-depth* 0
+                   *deepest-failure* nil]
+           (try
+             (f input)
+             (catch Failure failure
+               (throw *deepest-failure*)))))))
+  ([old-view pattern info]
+     (let [f (old-view pattern info)]
+       (if (instance? Node pattern)
+         (let [name (:name pattern)]
+           (fn [input remaining env]
+             (try
+               (f input remaining env)
+               (catch Failure failure
+                 (when (> *depth* *deepest-depth*)
+                   (set! *deepest-depth* *depth*)
+                   (set! *deepest-failure* (Failure. (str failure " at node `" name "` on input `" input "`"))))
+                 (throw failure)))))
+         f))))

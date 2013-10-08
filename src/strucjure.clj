@@ -1,6 +1,7 @@
 (ns strucjure (:require [strucjure.pattern :as p]
                        [strucjure.graph :as g]
                        [strucjure.sugar :as s]
+                       [strucjure.view :as v]
                        [plumbing.core :refer [fnk]]))
 
 ;; --- TODO ---
@@ -89,7 +90,8 @@
    symbol ~(s/is symbol?)))
 
 (def ns-validate
-  (s/view ~(s/node-of 'ns ns-grammar)))
+  (v/with-layers [v/with-depth v/with-deepest-failure]
+    (v/*view* ~(s/node-of 'ns ns-grammar))))
 
 (strucjure/ns-validate '(ns foo))
 
@@ -97,4 +99,5 @@
 
 (strucjure/ns-validate '(ns foo (:require [bar :refer :all])))
 
+(with-layers [with-depth with-deepest-failure] ((*view* (->Graph 'ns ns-grammar)) '(succ (succ succ))))
 (strucjure/ns-validate '(ns foo (:require [bar :refer-all])))

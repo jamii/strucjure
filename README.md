@@ -16,7 +16,38 @@ IllegalArgumentException No value supplied for key: true  clojure.lang.Persisten
 Strucjure is a library for describing stuff in an executable manner. You provide a declarative grammar for your stuff and strucjure gives you pattern matching, validators, parsers, walks and lenses (and eventually generators). The shape of your data is immediately apparent from your code and errors are clearly reported.
 
 ``` clojure
-;; TODO new ns example in here :)
+user> (require '[strucjure.sugar :as s] '[strucjure.view :as v])
+nil
+
+user> (def ns-grammar
+  (s/graph
+   ns (ns ^name ~symbol & ? ~docstring & ? ~attr-map & * ~reference)
+   docstring ~(s/is string?)
+   attr-map ~(s/is map?)
+   reference ~(s/or ~require ~import)
+   require (:require & * ~libspec)
+   libspec ~(s/or ~symbol
+                  [^prefix ~symbol & * ~libspec]
+                  [~symbol & * & ~option])
+   option ~(s/or (:as ~symbol)
+                 (:refer ~(s/or :all [& * ~symbol]))
+                 (:reload)
+                 (:reload-all)
+                 (:verbose))
+   import (:import & * [~symbol & * ~symbol])
+   symbol ~(s/is symbol?)))
+#'user/ns-grammar
+
+user> (def ns-validate
+  (v/with-layers [v/with-depth v/with-deepest-failure]
+    (v/*view* (s/node-of 'ns ns-grammar))))
+#'user/ns-validate
+
+user> (ns-validate '(ns foo (:require [bar :refer :all])))
+(ns foo (:require [bar :refer :all]))
+
+user> (ns-validate '(ns foo (:require [bar :refer-all])))
+Failure strucjure.view.Failure: (trap-failure (#<core$symbol_QMARK_ clojure.core$symbol_QMARK_@7078cdad> :refer-all)) at node `symbol` on input `:refer-all`  strucjure.view/with-deepest-failure/fn--42754 (view.clj:372)
 ```
 
 ## Note

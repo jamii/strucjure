@@ -1,8 +1,10 @@
-(ns strucjure)
+(ns strucjure (:require [strucjure.pattern :as p]
+                       [strucjure.graph :as g]
+                       [strucjure.sugar :as s]
+                       [plumbing.core :refer [fnk]]))
 
 ;; --- TODO ---
 ;; finish ns example
-;; use wolfes trick for closures. for lexically scoped parts, just add dependency in fnk and don't check it in Output
 ;; README - http://hugoduncan.org/post/evaluate_clojure_in_emacs_markdown_buffers/ or similar
 ;; tests (string in regression, readme, bootstrap, generative)
 ;; optimisations in view
@@ -20,13 +22,11 @@
 ;;   at minimum need to be able to push context down into nodes
 
 ;; --- LATER ---
-;; switch to fn-based staging compiler - are the extra stack frames going to be a problem?
-;; having both patterns and views is awkward - try to unify
 ;; for prewalks can just build ast by attaching name and bindings in metadata
 ;; need to be able to alter views (store original pattern in meta and have pattern/alter and graph/alter)
 ;; cut by returning delay - can trampoline to the nearest try - needs work inside Or/ZeroOrMore
 ;; gens
-;; type hinting
+;; types
 ;; string patterns, ~(chain "foo" "/" "bar")
 ;; binary patterns
 ;; reimplement core
@@ -70,11 +70,6 @@
 ;; times yield speedups. We present experimental evidence to support these
 ;; claims.'
 
-(require '[strucjure.pattern :as p]
-         '[strucjure.graph :as g]
-         '[strucjure.sugar :as s]
-         '[plumbing.core :refer [fnk]])
-
 (def ns-grammar
   (s/graph
    ns (ns ^name ~symbol & ? ~docstring & ? ~attr-map & * ~reference)
@@ -94,10 +89,12 @@
    symbol ~(s/is symbol?)))
 
 (def ns-validate
-  (s/view ~(s/node-of ns-grammar 'ns)))
+  (s/view ~(s/node-of 'ns ns-grammar)))
 
-(ns-validate '(ns foo))
+(strucjure/ns-validate '(ns foo))
 
-(ns-validate '(ns foo (:require bar)))
+(strucjure/ns-validate '(ns foo (:require bar)))
 
-(ns-validate '(ns foo (:require [bar :refer :all])))
+(strucjure/ns-validate '(ns foo (:require [bar :refer :all])))
+
+(strucjure/ns-validate '(ns foo (:require [bar :refer-all])))

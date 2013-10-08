@@ -4,7 +4,6 @@
             [strucjure.util :refer [with-syms]]
             [strucjure.pattern :as pattern :refer [->Rest ->Seqable ->Any ->Is ->Guard ->Name ->Or ->And ->Repeated ->WithMeta ->Node ->Edge ->Graph]]
             [strucjure.graph :as graph]
-            ;;[strucjure.debug :as debug]
             [strucjure.view :as view]))
 
 ;; TODO wrapping parser/rest in [] and calling first (elem) is ugly
@@ -112,10 +111,10 @@
 ;; (defmacro trace [sugar]
 ;;   (view/pattern->view (debug/pattern-with-trace (eval (desugar-pattern sugar))) true true))
 
-(defmacro match [input & sugars&outputs]
-  (let [pattern (->Or (vec (for [[sugar output] (partition 2 sugars&outputs)]
-                             (let [pattern (eval (desugar-pattern sugar))
-                                   [_ bound] (pattern/with-bound pattern)]
-                               (->Output pattern (eval `(fnk [~@bound] ~output)))))))]
-    `(let [[output# remaining#] (~(view/pattern->view pattern true false) ~input)]
-       output#)))
+;; (defmacro match [input & sugars&outputs]
+;;   (let [pattern (->Or (vec (for [[sugar output] (partition 2 sugars&outputs)]
+;;                              (let [pattern (eval (desugar-pattern sugar))
+;;                                    [_ bound] (pattern/with-bound pattern)]
+;;                                (->Output pattern (eval `(fnk [~@bound] ~output)))))))]
+;;     `(let [[output# remaining#] (~(view/pattern->view pattern true false) ~input)]
+;;        output#)))

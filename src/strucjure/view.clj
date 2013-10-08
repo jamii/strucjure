@@ -293,11 +293,35 @@
 (defn with-output-at [class name->fnk]
   (fn [pattern subview restview info]
     (if (and (instance? class pattern) (contains? name->fnk (:name pattern)))
-      (do (prn 'info info)
-          (let [fnk-call (fnk->call (name->fnk (:name pattern)) (:name->pos info))
-                inner-view (restview pattern info)]
-            (fn [input remaining env]
-              (inner-view input remaining env)
-              (fnk-call env))))
-      (do (prn 'unfo info pattern)
-          (restview pattern info)))))
+      (let [fnk-call (fnk->call (name->fnk (:name pattern)) (:name->pos info))
+            inner-view (restview pattern info)]
+        (fn [input remaining env]
+          (inner-view input remaining env)
+          (fnk-call env)))
+      (restview pattern info))))
+
+;; --- TRACING ---
+
+(def ^:dynamic *depth* 0)
+
+(defn- indent [n]
+  (apply str (repeat (* 4 n) \ )))
+
+(defn wrap-with-trace [f name]
+  (fn [input remaining env]
+    (println (indent *depth*) "=>" name input)
+    (try
+      (let [output (binding [*depth* (inc *depth*)] (f input remaining env))]
+        (println (indent *depth*) "<=" name output (when remaining (get-remaining! remaining)))
+        output)
+      (catch strucjure.view.Failure failure
+        (println (indent *depth*) "X" name (str failure))
+        (throw failure)))))
+
+(defn trace-all [pattern subview restview info]
+  (wrap-with-trace (restview pattern info) (pr-str pattern)))
+
+(defn trace-nodes [pattern subview restview info]
+  (if (instance? Node pattern)
+    (wrap-with-trace (restview pattern info) (:name pattern))
+    (restview pattern info)))

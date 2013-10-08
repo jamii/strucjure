@@ -24,38 +24,39 @@
 (defrecord Or [patterns])
 (defrecord And [patterns])
 (defrecord Seqable [patterns])
-(defrecord NodeOf [graph name])
+(defrecord Edge [name])
+(defrecord Node [name pattern])
+(defrecord Graph [name graph])
 
 ;; pseudo-patterns
 (defrecord Rest [pattern])
-(defrecord Node [name])
 
 (extend-protocol-by-fn
  Pattern
 
  (fn subpatterns [this]
-   [nil Object Any Is Node NodeOf] nil
+   [nil Object Any Is Edge Graph] nil
    [ISeq IPersistentVector] this
    [IPersistentMap] (vals this)
-   [Rest Guard Name Repeated] [(:pattern this)]
+   [Rest Guard Name Repeated Node] [(:pattern this)]
    [WithMeta] [(:pattern this) (:meta-pattern this)]
    [Or And Seqable] (:patterns this))
 
  (fn with-subpatterns [this subpatterns]
-   [nil Object Any Is Node NodeOf] this
+   [nil Object Any Is Edge Graph] this
    [ISeq] (apply list subpatterns)
    [IPersistentVector] (vec subpatterns)
    [IPersistentMap] (zipmap (keys this) subpatterns)
-   [Rest Guard Name Repeated] (assoc this :pattern (first subpatterns))
+   [Rest Guard Name Repeated Node] (assoc this :pattern (first subpatterns))
    [WithMeta] (assoc this :pattern (first subpatterns) :meta-pattern (second subpatterns))
    [Or And Seqable] (assoc this :patterns subpatterns))
 
  (fn used [this]
-   [nil Object ISeq IPersistentVector IPersistentMap Any Is Rest Name Repeated WithMeta Or And Seqable Node NodeOf] #{}
+   [nil Object ISeq IPersistentVector IPersistentMap Any Is Rest Name Repeated WithMeta Or And Seqable Node Edge Graph] #{}
    [Guard] (set (fnk->args (:fnk this))))
 
  (fn bound [this]
-   [nil Object ISeq IPersistentVector IPersistentMap Any Is Rest Guard Repeated WithMeta Or And Seqable Node NodeOf] #{}
+   [nil Object ISeq IPersistentVector IPersistentMap Any Is Rest Guard Repeated WithMeta Or And Seqable Node Edge Graph] #{}
    [Name] #{(:name this)}))
 
 (defn fmap [pattern f]

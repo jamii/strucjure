@@ -8,19 +8,21 @@
 ;; TODO allow parts of the graph to take args eg bindable in sugar
 
 (defn dependencies [pattern]
-  (if (instance? strucjure.pattern.Node pattern)
+  (if (instance? strucjure.pattern.Edge pattern)
     #{(:name pattern)}
     (union (map dependencies (pattern/subpatterns pattern)))))
 
-(defn named-node [pattern]
-  (if (instance? strucjure.pattern.Node pattern)
+(defn named-edge [pattern]
+  (if (instance? strucjure.pattern.Edge pattern)
     (pattern/->Name (:name pattern) pattern)
     pattern))
 
-(defn with-named-inner-nodes [graph]
-  (with-meta (map-vals #(pattern/postwalk % named-node) graph) (meta graph)))
+(defn with-named-edges [graph]
+  (with-meta
+    (map-vals #(pattern/postwalk % named-edge) graph)
+    (meta graph)))
 
-(defn with-named-outer-nodes [graph]
+(defn with-named-nodes [graph]
   (with-meta
     (for-map [[name pattern] graph] name (pattern/->Name name pattern))
     (meta graph)))

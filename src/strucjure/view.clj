@@ -5,7 +5,7 @@
             [strucjure.pattern :as pattern]
             [strucjure.graph :as graph])
   (:import [clojure.lang ISeq IPersistentVector IPersistentMap]
-           [strucjure.pattern Any Is Rest Guard Name Repeated WithMeta Or And Seqable Node NodeOf]
+           [strucjure.pattern Any Is Rest Guard Name Repeated WithMeta Or And Seqable Node Edge Graph]
            [strucjure.view Failure]))
 
 ;; TODO go back to single failure and identical? once done debugging
@@ -15,6 +15,12 @@
   (view [this subview info]
     "Returns a view-fn.
      Call subview rather than recursing directly."))
+
+(defn pattern->info [pattern]
+  (let [[pattern bound] (pattern/with-bound pattern)
+        pattern (pattern/with-used pattern #{})]
+    (pattern/check-used-not-bound pattern)
+    {:name->pos (zipmap bound (range))}))
 
 ;; --- FAILURE ---
 
@@ -125,7 +131,7 @@
        (vec (seq-view (seq input) remaining env))))
 
    [Seqable]
-   (let [seq-view (seq->view this subview info)]
+   (let [seq-view (seq->view (:patterns this) subview info)]
      (fn [input remaining env]
        (check (or (nil? input) (instance? clojure.lang.Seqable input)))
        (seq-view (seq input) remaining env)))
@@ -147,7 +153,6 @@
       (let [head-view (subview head info)
             tail-view (or->view tail subview info)]
         (fn [input remaining env]
-          (prn head tail)
           (let [old-remaining (when remaining (get-remaining! remaining))]
             (on-fail (head-view input remaining env)
                      (do (set-remaining! remaining old-remaining)
@@ -233,7 +238,7 @@
          meta-view (subview meta-pattern info)]
      (fn [input remaining env]
        (try-with-meta (pattern-view input remaining env)
-                      (meta-view input nil env))))
+                      (meta-view (meta input) nil env))))
 
    [Or]
    (or->view patterns subview info)
@@ -241,15 +246,22 @@
    [And]
    (and->view patterns subview info)
 
-   [Node]
+   [Edge]
    (name->node name)
 
-   [NodeOf]
+   [Node]
+   (subview pattern info)
+
+   [Graph]
    (let [name->pointer (for-map [[name pattern] graph]
                                 name (NodePointer. nil))
-         info (update-in info [:name->node] merge name->pointer)
          name->node (for-map [[name pattern] graph]
-                             name (subview pattern info))]
+                             name
+                             (let [info (pattern->info pattern)
+                                   node-view (subview (Node. name pattern) (assoc info :name->node name->pointer))
+                                   env-length (count (:name->pos info))]
+                               (fn [input remaining _]
+                                 (node-view input remaining (object-array env-length)))))]
      (doseq [[name pattern] graph]
        (set-val (name->pointer name) (name->node name)))
      (name->node name))))
@@ -266,31 +278,26 @@
   (set-val [this new-val]
     (set! f new-val)))
 
-(defn info [pattern]
-  (let [[pattern bound] (pattern/with-bound pattern)
-        pattern (pattern/with-used pattern #{})]
-    (prn 'b bound)
-    (pattern/check-used-not-bound pattern)
-    {:name->pos (zipmap bound (range))}))
-
 (defn view-with [layers pattern]
   (let [subview (ViewPointer. nil)]
     (set-val subview #(view %1 subview %2))
     (doseq [layer layers]
       (let [restview (get-val subview)]
         (set-val subview #(layer %1 subview restview %2))))
-    (let [info (info pattern)
+    (let [info (pattern->info pattern)
           superview (subview pattern info)
           env-length (count (:name->pos info))]
       (fn ([input] (superview input nil (object-array env-length)))
          ([input remaining] (superview input remaining (object-array env-length)))))))
 
-(defn with-output [name->fnk]
+(defn with-output-at [class name->fnk]
   (fn [pattern subview restview info]
-    (if (and (instance? Name pattern) (contains? name->fnk (:name pattern)))
-      (let [fnk-call (fnk->call (name->fnk (:name pattern)) (:name->pos info))
-            inner-view (restview pattern info)]
-        (fn [input remaining env]
-          (inner-view input remaining env)
-          (fnk-call env)))
-      (restview pattern info))))
+    (if (and (instance? class pattern) (contains? name->fnk (:name pattern)))
+      (do (prn 'info info)
+          (let [fnk-call (fnk->call (name->fnk (:name pattern)) (:name->pos info))
+                inner-view (restview pattern info)]
+            (fn [input remaining env]
+              (inner-view input remaining env)
+              (fnk-call env))))
+      (do (prn 'unfo info pattern)
+          (restview pattern info)))))

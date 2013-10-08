@@ -50,39 +50,39 @@ user> (ns-validate '(ns foo (:require [bar :refer-all])))
 Failure strucjure.view.Failure: (trap-failure (#<core$symbol_QMARK_ clojure.core$symbol_QMARK_@7078cdad> :refer-all)) at node `symbol` on input `:refer-all`  strucjure.view/with-deepest-failure/fn--42754 (view.clj:372)
 
 user> (def ns-validate-verbose
-  (v/with-layers [v/with-depth v/with-deepest-failure v/trace-nodes]
+  (v/with-layers [v/with-node-depth v/trace-nodes]
     (v/*view* (s/node-of 'ns ns-grammar))))
 #'user/ns-validate-verbose
 
 user> (ns-validate-verbose '(ns foo (:require [bar :refer-all])))
-     => ns (ns foo (:require [bar :refer-all]))
-                             => symbol foo
-                             <= symbol foo nil
-                             => docstring (:require [bar :refer-all])
-                             X docstring strucjure.view.Failure: (trap-failure (#<core$string_QMARK_ clojure.core$string_QMARK_@5d850909> (:require [bar :refer-all])))
-                             => attr-map (:require [bar :refer-all])
-                             X attr-map strucjure.view.Failure: (trap-failure (#<core$map_QMARK_ clojure.core$map_QMARK_@581cb215> (:require [bar :refer-all])))
-                             => reference (:require [bar :refer-all])
-                                                 => require (:require [bar :refer-all])
-                                                                         => libspec [bar :refer-all]
-                                                                                             => symbol [bar :refer-all]
-                                                                                             X symbol strucjure.view.Failure: (trap-failure (#<core$symbol_QMARK_ clojure.core$symbol_QMARK_@7078cdad> [bar :refer-all]))
-                                                                                                     => symbol bar
-                                                                                                     <= symbol bar nil
-                                                                                                     => libspec :refer-all
-                                                                                                                         => symbol :refer-all
-                                                                                                                         X symbol strucjure.view.Failure: (trap-failure (#<core$symbol_QMARK_ clojure.core$symbol_QMARK_@7078cdad> :refer-all))
-                                                                                                     X libspec strucjure.view.Failure: (vector? :refer-all)
-                                                                                                 => symbol bar
-                                                                                                 <= symbol bar nil
-                                                                                                     => option (:refer-all)
-                                                                                                     X option strucjure.view.Failure: (= :verbose :refer-all)
-                                                                         X libspec strucjure.view.Failure: (clojure.core/nil? (:refer-all))
-                                                 X require strucjure.view.Failure: (clojure.core/nil? ([bar :refer-all]))
-                                                 => import (:require [bar :refer-all])
-                                                 X import strucjure.view.Failure: (= :import :require)
-                             X reference strucjure.view.Failure: (= :import :require)
-     X ns strucjure.view.Failure: (clojure.core/nil? ((:require [bar :refer-all])))
+ => ns (ns foo (:require [bar :refer-all]))
+     => symbol foo
+     <= symbol foo nil
+     => docstring (:require [bar :refer-all])
+     X docstring strucjure.view.Failure: (trap-failure (#<core$string_QMARK_ clojure.core$string_QMARK_@5d850909> (:require [bar :refer-all])))
+     => attr-map (:require [bar :refer-all])
+     X attr-map strucjure.view.Failure: (trap-failure (#<core$map_QMARK_ clojure.core$map_QMARK_@581cb215> (:require [bar :refer-all])))
+     => reference (:require [bar :refer-all])
+         => require (:require [bar :refer-all])
+             => libspec [bar :refer-all]
+                 => symbol [bar :refer-all]
+                 X symbol strucjure.view.Failure: (trap-failure (#<core$symbol_QMARK_ clojure.core$symbol_QMARK_@7078cdad> [bar :refer-all]))
+                 => symbol bar
+                 <= symbol bar nil
+                 => libspec :refer-all
+                     => symbol :refer-all
+                     X symbol strucjure.view.Failure: (trap-failure (#<core$symbol_QMARK_ clojure.core$symbol_QMARK_@7078cdad> :refer-all))
+                 X libspec strucjure.view.Failure: (vector? :refer-all)
+                 => symbol bar
+                 <= symbol bar nil
+                 => option (:refer-all)
+                 X option strucjure.view.Failure: (= :verbose :refer-all)
+             X libspec strucjure.view.Failure: (clojure.core/nil? (:refer-all))
+         X require strucjure.view.Failure: (clojure.core/nil? ([bar :refer-all]))
+         => import (:require [bar :refer-all])
+         X import strucjure.view.Failure: (= :import :require)
+     X reference strucjure.view.Failure: (= :import :require)
+ X ns strucjure.view.Failure: (clojure.core/nil? ((:require [bar :refer-all])))
 Failure strucjure.view.Failure: (trap-failure (#<core$symbol_QMARK_ clojure.core$symbol_QMARK_@7078cdad> :refer-all)) at node `symbol` on input `:refer-all`  strucjure.view/with-deepest-failure/fn--42754 (view.clj:372)
 ```
 

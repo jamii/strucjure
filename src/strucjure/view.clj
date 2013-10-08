@@ -314,6 +314,20 @@
          (binding [*depth* (inc *depth*)]
            (f input remaining env))))))
 
+(defn with-node-depth
+  ([old-view pattern]
+     (let [f (old-view pattern)]
+       (fn [input]
+         (binding [*depth* 0]
+           (f input)))))
+  ([old-view pattern info]
+     (let [f (old-view pattern info)]
+       (if (instance? Node pattern)
+         (fn [input remaining env]
+           (binding [*depth* (inc *depth*)]
+             (f input remaining env)))
+         f))))
+
 ;; --- TRACING ---
 
 (defn- indent [n]

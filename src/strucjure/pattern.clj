@@ -2,7 +2,7 @@
   (:refer-clojure :exclude [assert])
   (:require [clojure.set :refer [union difference]]
             [plumbing.core :refer [for-map aconcat map-vals fnk]]
-            [strucjure.util :refer [with-syms assert extend-protocol-by-fn fnk->args try-vary-meta try-with-meta]])
+            [strucjure.util :refer [assert extend-protocol-by-fn fnk->args try-vary-meta try-with-meta]])
   (:import [clojure.lang ISeq IPersistentVector IPersistentMap]))
 
 ;; TODO Records

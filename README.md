@@ -21,21 +21,21 @@ nil
 
 user> (def ns-grammar
   (s/graph
-   ns (ns ^name ~symbol & ? ~docstring & ? ~attr-map & * ~reference)
-   docstring ~(s/is string?)
-   attr-map ~(s/is map?)
-   reference ~(s/or ~require ~import)
-   require (:require & * ~libspec)
-   libspec ~(s/or ~symbol
-                  [^prefix ~symbol & * ~libspec]
-                  [~symbol & * & ~option])
-   option ~(s/or (:as ~symbol)
-                 (:refer ~(s/or :all [& * ~symbol]))
-                 (:reload)
-                 (:reload-all)
-                 (:verbose))
-   import (:import & * [~symbol & * ~symbol])
-   symbol ~(s/is symbol?)))
+   ns (list 'ns ^name symbol (&? docstring) (&? attr-map) (&* reference))
+   docstring (is string?)
+   attr-map (is map?)
+   reference (or require import)
+   require (list :require (&* libspec))
+   libspec (or symbol
+               [^prefix symbol (&* libspec)]
+               [symbol (&*& option)])
+   option (or (list :as symbol)
+              (list :refer (or :all [(&* symbol)]))
+              (list :reload)
+              (list :reload-all)
+              (list :verbose))
+   import (list :import (&* [symbol & * symbol]))
+   symbol (is symbol?)))
 #'user/ns-grammar
 
 user> (def ns-validate

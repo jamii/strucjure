@@ -87,6 +87,7 @@
    num ~(or ~succ ~zero)
    succ (succ ^x ~num)
    zero zero))
+(with-layers [with-depth with-deepest-failure] ((*view* (->Graph 'num num-graph)) '(succ (succ succ))))
 (def num-out
   (output-in num-graph
              'zero (fnk [] 0)

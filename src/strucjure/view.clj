@@ -79,7 +79,9 @@
                        (fn [~env]
                          (pos-fn#
                           ~@(for [arg (fnk->args fnk)]
-                              `(aget ~env ~(arg->index arg)))))))]
+                              (let [index (arg->index arg)]
+                                (assert (integer? index) "Can't find name" arg "in" (set (keys arg->index)))
+                                `(aget ~env ~index)))))))]
     ((eval pure-call) (fnk->pos-fn fnk))))
 
 ;; --- VALUE PATTERNS ---

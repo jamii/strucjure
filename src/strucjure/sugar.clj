@@ -42,7 +42,7 @@
   (clojure.walk/prewalk
    (fn [form]
      (if (contains? overrides form)
-       (ns-resolve 'strucjure.sugar form)
+       (symbol (str "strucjure.sugar/" form))
        form))
    form))
 

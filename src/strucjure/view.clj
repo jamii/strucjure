@@ -285,7 +285,21 @@
 
 ;; --- OUTPUT ---
 
-(defn with-output-at [class name->fnk]
+(defn with-pre-fns [class name->fnk]
+  (fn
+    ([old-view pattern]
+       (old-view pattern))
+    ([old-view pattern info]
+       (if (and (instance? class pattern) (contains? name->fnk (:name pattern)))
+         (let [fnk-call (fnk->call (name->fnk (:name pattern)) (:name->pos info))
+               inner-view (old-view pattern info)]
+           (fn [input remaining env]
+             (let [output (fnk-call env)]
+               (inner-view input remaining env)
+               output)))
+         (old-view pattern info)))))
+
+(defn with-post-fns [class name->fnk]
   (fn
     ([old-view pattern]
        (old-view pattern))

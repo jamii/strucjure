@@ -61,3 +61,11 @@
 
 (defmacro graph [& names&sugars]
   (with-names-and-edges names&sugars))
+
+(defn prewalk [pattern names&fnks]
+  (view/with-layers [(view/with-pre-fns strucjure.pattern.Node names&fnks)]
+    (view/*view* pattern)))
+
+(defn postwalk [pattern names&fnks]
+  (view/with-layers [(view/with-post-fns strucjure.pattern.Node names&fnks)]
+    (view/*view* pattern)))

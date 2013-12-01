@@ -3,7 +3,8 @@
   (:require [clojure.walk :refer [prewalk postwalk-replace]]
             [plumbing.core :refer [aconcat for-map]]
             [strucjure.util :refer [with-syms assert fnk->pos-fn fnk->args extend-protocol-by-fn try-with-meta]]
-            [strucjure.pattern :as pattern])
+            [strucjure.pattern :as pattern]
+            [proteus :refer [let-mutable]])
   (:import [clojure.lang ISeq IPersistentVector IPersistentMap]
            [strucjure.pattern Any Is Rest Guard Name Repeated WithMeta Or And Seqable Refer Where Output]
            [strucjure.view Failure]))
@@ -54,7 +55,7 @@
 
    [clojure.lang.ISeq]
    `(do (check (seq? ~input))
-      ~(seq->view this input))))
+      ~(seq->view this))))
 
 (defn or->view [patterns]
   (assert (not (empty? patterns)) "OR patterns must not be empty")
@@ -68,17 +69,13 @@
  View
  (fn view [{:keys [pattern patterns name code] :as this}]
    [Name]
-   `(let [output# ~(view ~pattern)]
-      (.set ~name output#)
+   `(let [output# ~(view pattern)]
+      (set! ~name output#)
       output#)
 
    [Output]
    `(do ~(view pattern)
-      (trap-failure
-       ~(postwalk-replace
-         (for-map [name (:bound-here (meta this))]
-                  name `(.x ~name)) ;; TODO this is crude - use the walk from proteus instead
-         code)))
+      (trap-failure ~code))
 
    [Or]
    (or->view patterns)
@@ -87,9 +84,7 @@
 ;; COMPILERS
 
 (defn with-locals [bound code]
-  `(let [~@(aconcat
-            (for [name bound]
-              [name `(new proteus.Containers$O nil)]))]
+  `(let-mutable [~@(interleave bound (repeat nil))]
      ~code))
 
 (defn view-direct [pattern]

@@ -11,52 +11,49 @@
 (defprotocol Pattern
   (subpatterns [this] "A list of subpatterns of this pattern (just children, not descendants)")
   (with-subpatterns [this subpatterns] "Replace the subpatterns of this pattern, preserving metadata (if the number of subpatterns is wrong the behaviour is unspecified)")
-  (used [this] "Which names are used by this pattern (not subpatterns)")
   (bound [this] "Which names are bound by this pattern (not subpatterns))"))
 
 ;; patterns
 (defrecord Any [])
 (defrecord Is [f])
-(defrecord Guard [pattern fnk])
+(defrecord Guard [pattern code])
 (defrecord Name [name pattern])
 (defrecord Repeated [min-count max-count pattern])
 (defrecord WithMeta [pattern meta-pattern])
 (defrecord Or [patterns])
 (defrecord And [patterns])
 (defrecord Seqable [patterns])
-(defrecord Edge [name])
-(defrecord Node [name pattern])
-(defrecord Graph [name graph])
+
+;; recursive patterns
+(defrecord Refer [name])
+(defrecord Where [pattern graph])
 
 ;; pseudo-patterns
 (defrecord Rest [pattern])
+(defrecord Output [pattern code])
 
 (extend-protocol-by-fn
  Pattern
 
  (fn subpatterns [this]
-   [nil Object Any Is Edge Graph] nil
+   [nil Object Any Is Refer Where] nil
    [ISeq IPersistentVector] this
    [IPersistentMap] (vals this)
-   [Rest Guard Name Repeated Node] [(:pattern this)]
+   [Rest Guard Name Repeated Output] [(:pattern this)]
    [WithMeta] [(:pattern this) (:meta-pattern this)]
    [Or And Seqable] (:patterns this))
 
  (fn with-subpatterns [this subpatterns]
-   [nil Object Any Is Edge Graph] this
+   [nil Object Any Is Refer Where] this
    [ISeq] (apply list subpatterns)
    [IPersistentVector] (vec subpatterns)
    [IPersistentMap] (zipmap (keys this) subpatterns)
-   [Rest Guard Name Repeated Node] (assoc this :pattern (first subpatterns))
+   [Rest Guard Name Repeated Output] (assoc this :pattern (first subpatterns))
    [WithMeta] (assoc this :pattern (first subpatterns) :meta-pattern (second subpatterns))
    [Or And Seqable] (assoc this :patterns subpatterns))
 
- (fn used [this]
-   [nil Object ISeq IPersistentVector IPersistentMap Any Is Rest Name Repeated WithMeta Or And Seqable Node Edge Graph] #{}
-   [Guard] (set (fnk->args (:fnk this))))
-
  (fn bound [this]
-   [nil Object ISeq IPersistentVector IPersistentMap Any Is Rest Guard Repeated WithMeta Or And Seqable Node Edge Graph] #{}
+   [nil Object ISeq IPersistentVector IPersistentMap Any Is Rest Guard Repeated WithMeta Or And Seqable Refer Where Output] #{}
    [Name] #{(:name this)}))
 
 (defn fmap [pattern f]
@@ -74,15 +71,3 @@
         pattern (with-subpatterns pattern (map first subpatterns&bound-below))
         pattern (try-vary-meta pattern assoc :bound-here bound-here)]
     [pattern bound-here]))
-
-(defn with-used [pattern used-above]
-  (let [used-here (union (used pattern) used-above)
-        subpatterns (map #(with-used % used-here) (subpatterns pattern))
-        pattern (with-subpatterns pattern subpatterns)
-        pattern (try-vary-meta pattern assoc :used-here used-here)]
-    pattern))
-
-(defn check-used-not-bound [pattern]
-  (prewalk pattern (fn [pattern]
-                      (let [used-not-bound (difference (used pattern) (:bound-here (meta pattern)))]
-                        (assert (empty? used-not-bound) "Names" used-not-bound "are used but not bound in" pattern)))))

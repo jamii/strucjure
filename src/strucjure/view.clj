@@ -1,12 +1,11 @@
 (ns strucjure.view
   (:refer-clojure :exclude [assert])
-  (:require [clojure.walk :refer [prewalk]]
+  (:require [clojure.walk :refer [prewalk postwalk-replace]]
             [plumbing.core :refer [aconcat for-map]]
             [strucjure.util :refer [with-syms assert fnk->pos-fn fnk->args extend-protocol-by-fn try-with-meta]]
-            [strucjure.pattern :as pattern]
-            [strucjure.graph :as graph])
+            [strucjure.pattern :as pattern])
   (:import [clojure.lang ISeq IPersistentVector IPersistentMap]
-           [strucjure.pattern Any Is Rest Guard Name Repeated WithMeta Or And Seqable Node Edge Graph]
+           [strucjure.pattern Any Is Rest Guard Name Repeated WithMeta Or And Seqable Refer Where Output]
            [strucjure.view Failure]))
 
 ;; SEMANTICS
@@ -18,39 +17,44 @@
 
 (defn seq->view [pattern]
   (if-let [[first-pattern & next-pattern] pattern]
-    `(do (::view ~view ~first-pattern (first ~input))
-         (::view ~seq->view ~next-pattern (next ~input)))
+    `(cons (::view ~view ~first-pattern (first ~input))
+       (::view ~seq->view ~next-pattern (next ~input)))
     `(assert (nil? ~input))))
 
 (extend-protocol-by-fn
  View
  (fn view [this]
    [Object]
-   `(assert (= '~this ~input))
+   `(do (assert (= '~this ~input))
+      '~this)
 
    [clojure.lang.ISeq]
    `(do (assert (seq? ~input))
-        (::view ~seq->view ~this ~input))))
+      (::view ~seq->view ~this ~input))))
 
 (extend-protocol-by-fn
  View
- (fn view [{:keys [pattern name]}]
+ (fn view [{:keys [pattern name code] :as this}]
    [Name]
-   `(.set ~name (::view ~view ~pattern ~input))
+   `(let [output# (::view ~view ~pattern ~input)]
+      (.set ~name output#)
+      output#)
 
-
+   [Output]
+   `(do (::view ~view ~pattern ~input)
+      ~(postwalk-replace
+        (for-map [name (:bound-here (meta this))]
+                 name `(.x ~name)) ;; TODO this is crude - use the walk from proteus instead
+        code))
    ))
 
 ;; COMPILERS
 
-(defn with-locals [pattern code]
-  (let [[pattern bound] (pattern/with-bound pattern)
-        pattern (pattern/with-used pattern #{})]
-    (pattern/check-used-not-bound pattern)
-    `(let [~@(aconcat
-              (for [name bound]
-                [name `(new proteus.Containers$O nil)]))]
-       ~code)))
+(defn with-locals [bound code]
+  `(let [~@(aconcat
+            (for [name bound]
+              [name `(new proteus.Containers$O nil)]))]
+     ~code))
 
 (defn rewrite [code keyword f]
   (prewalk
@@ -61,11 +65,12 @@
    code))
 
 (defn view-direct [pattern]
-  (with-locals pattern
-    (rewrite (view pattern) ::view
-             (fn [sub-view sub-pattern sub-input]
-               `(let [~input ~sub-input]
-                  ~(sub-view sub-pattern))))))
+  (let [[pattern bound] (pattern/with-bound pattern)]
+    (with-locals bound
+      (rewrite (view pattern) ::view
+               (fn [sub-view sub-pattern sub-input]
+                 `(let [~input ~sub-input]
+                    ~(sub-view sub-pattern)))))))
 
 (declare walk-fn)
 
@@ -80,24 +85,26 @@
              `(::call ~(new-fn fns (sub-view sub-pattern)) ~sub-input))))
 
 (defn view-indirect [pattern]
-  (let [fns (atom [])
+  (let [[pattern bound] (pattern/with-bound pattern)
+        fns (atom [])
         top (new-fn fns (view pattern))]
     (rewrite `(fn [~input]
-                ~(with-locals pattern
+                ~(with-locals bound
                    `(letfn [~@@fns] (~top ~input))))
              ::call
              (fn [f arg]
                `(~f ~arg)))))
 
 (defn view-reified [pattern]
-  (let [fns (atom [])
+  (let [[pattern bound] (pattern/with-bound pattern)
+        fns (atom [])
         top (new-fn fns (view pattern))
         interface (gensym "IMatch")]
     (eval `(definterface ~interface ~@(for [[name args & _] @fns] `(~name [~@args]))))
     (rewrite `(fn [~input]
-                ~(with-locals pattern
+                ~(with-locals bound
                    `(let [r# (reify ~interface ~@(for [[name args & body] @fns] `(~name [~'this ~@args] ~@body)))]
-                     (~(symbol (str "." top)) r# ~input))))
+                      (~(symbol (str "." top)) r# ~input))))
              ::call
              (fn [f arg]
                `(~(symbol (str "." f)) ~'this ~arg)))))
@@ -118,10 +125,11 @@
   (bench (indirect test)) ;; 12.458736 µs
   (bench (reified test)) ;;  6.413043 µs
 
-  (view-direct (Name. 'x (list 1 2 3)))
-  (view-indirect (Name. 'x (list 1 2 3)))
-  (view-reified (Name. 'x (list 1 2 3)))
+  (def named (Output. (list 1 (Name. 'x 2) 3) 'x))
+  ((eval `(fn [~input] ~(view-direct named))) (list 1 2 3))
+  ((eval (view-indirect named)) (list 1 2 3))
+  ((eval (view-reified named)) (list 1 2 3))
 
   (view (list 1 2))
   (seq->view (list 1 2))
-)
+  )

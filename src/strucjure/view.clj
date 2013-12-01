@@ -35,10 +35,14 @@
 
 (def input (gensym "input"))
 
+(defmacro let-input [value body]
+  `(let [~input ~value] ~body))
+
 (defn seq->view [pattern]
   (if-let [[first-pattern & next-pattern] pattern]
-    `(cons (::view ~view ~first-pattern (first ~input))
-       (::view ~seq->view ~next-pattern (next ~input)))
+    `(cons
+      (let-input (first ~input) ~(view first-pattern))
+      (let-input (next ~input) ~(seq->view next-pattern)))
     `(check (nil? ~input))))
 
 (extend-protocol-by-fn
@@ -50,26 +54,26 @@
 
    [clojure.lang.ISeq]
    `(do (check (seq? ~input))
-      (::view ~seq->view ~this ~input))))
+      ~(seq->view this input))))
 
 (defn or->view [patterns]
   (assert (not (empty? patterns)) "OR patterns must not be empty")
   (let [[first-pattern & next-pattern] patterns]
     (if next-pattern
-      `(on-fail (::view ~view ~first-pattern ~input)
-                (::view ~or->view ~next-pattern ~input))
-      `(::view ~view ~first-pattern ~input))))
+      `(on-fail ~(view first-pattern)
+                ~(or->view next-pattern))
+      (view first-pattern))))
 
 (extend-protocol-by-fn
  View
  (fn view [{:keys [pattern patterns name code] :as this}]
    [Name]
-   `(let [output# (::view ~view ~pattern ~input)]
+   `(let [output# ~(view ~pattern)]
       (.set ~name output#)
       output#)
 
    [Output]
-   `(do (::view ~view ~pattern ~input)
+   `(do ~(view pattern)
       (trap-failure
        ~(postwalk-replace
          (for-map [name (:bound-here (meta this))]
@@ -77,7 +81,7 @@
          code)))
 
    [Or]
-   `(::view ~or->view ~patterns ~input)
+   (or->view patterns)
    ))
 
 ;; COMPILERS
@@ -88,80 +92,25 @@
               [name `(new proteus.Containers$O nil)]))]
      ~code))
 
-(defn rewrite [code keyword f]
-  (prewalk
-   (fn [code]
-     (if (and (seq? code) (= keyword (first code)))
-       (apply f (rest code))
-       code))
-   code))
-
 (defn view-direct [pattern]
   (let [[pattern bound] (pattern/with-bound pattern)]
-    (with-locals bound
-      (rewrite (view pattern) ::view
-               (fn [sub-view sub-pattern sub-input]
-                 `(let [~input ~sub-input]
-                    ~(sub-view sub-pattern)))))))
-
-(declare walk-fn)
-
-(defn new-fn [fns code]
-  (let [name (gensym "foo")]
-    (swap! fns conj `(~name [~input] ~(walk-fn fns code)))
-    name))
-
-(defn walk-fn [fns code]
-  (rewrite code ::view
-           (fn [sub-view sub-pattern sub-input]
-             `(::call ~(new-fn fns (sub-view sub-pattern)) ~sub-input))))
-
-(defn view-indirect [pattern]
-  (let [[pattern bound] (pattern/with-bound pattern)
-        fns (atom [])
-        top (new-fn fns (view pattern))]
-    (rewrite `(fn [~input]
-                ~(with-locals bound
-                   `(letfn [~@@fns] (~top ~input))))
-             ::call
-             (fn [f arg]
-               `(~f ~arg)))))
-
-(defn view-reified [pattern]
-  (let [[pattern bound] (pattern/with-bound pattern)
-        fns (atom [])
-        top (new-fn fns (view pattern))
-        interface (gensym "IMatch")]
-    (eval `(definterface ~interface ~@(for [[name args & _] @fns] `(~name [~@args]))))
-    (rewrite (with-locals bound
-               `(let [r# (reify ~interface
-                           ~@(for [[name args & body] @fns]
-                               `(~name [~'this ~@args] ~@body)))]
-                  (~(symbol (str "." top)) r# ~input)))
-             ::call
-             (fn [f arg]
-               `(~(symbol (str "." f)) ~'this ~arg)))))
+    (with-locals bound (view pattern))))
 
 ;; BENCHMARKS
 
 (comment
   (use 'criterium.core)
-  (def pat (concat (range 10000 10050) [(Name. 'x 10050)] (range 10051 10100)))
+
+  (def pat (range 10000 10100))
   (def test (range 10000 10100))
+  (def test2 (range 10000 10100))
+
+  (def pat (Output. (list 1 (Name. 'x 2) 3) 'x))
+  (def test (list 1 2 3))
+  (def test2 (list 1 2 3))
 
   (def direct (eval `(fn [~input] ~(view-direct pat))))
-  (def indirect (eval (view-indirect pat)))
-  (def reified (eval (view-reified pat)))
 
-  (= pat test) ;; 5.797365 µs
-  (direct test) ;; 34.865619 µs
-  (indirect test) ;; 12.458736 µs
-  (reified test) ;;  6.413043 µs
-
-  (def named (Output. (list 1 (Name. 'x 2) 3) 'x))
-  ((eval `(fn [~input] ~(view-direct named))) (list 1 2 3))
-  ((eval (view-indirect named)) (list 1 2 3))
-  ((eval (view-reified named)) (list 1 2 3))
-  (view (list 1 2))
-  (seq->view (list 1 2))
+  (= test test2)
+  (direct test)
   )

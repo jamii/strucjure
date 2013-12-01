@@ -32,7 +32,25 @@
    `(do (assert (seq? ~input))
         (::view ~seq->view ~this ~input))))
 
+(extend-protocol-by-fn
+ View
+ (fn view [{:keys [pattern name]}]
+   [Name]
+   `(.set ~name (::view ~view ~pattern ~input))
+
+
+   ))
+
 ;; COMPILERS
+
+(defn with-locals [pattern code]
+  (let [[pattern bound] (pattern/with-bound pattern)
+        pattern (pattern/with-used pattern #{})]
+    (pattern/check-used-not-bound pattern)
+    `(let [~@(aconcat
+              (for [name bound]
+                [name `(new proteus.Containers$O nil)]))]
+       ~code)))
 
 (defn rewrite [code keyword f]
   (prewalk
@@ -43,10 +61,11 @@
    code))
 
 (defn view-direct [pattern]
-  (rewrite (view pattern) ::view
-           (fn [sub-view sub-pattern sub-input]
-             `(let [~input ~sub-input]
-                ~(sub-view sub-pattern)))))
+  (with-locals pattern
+    (rewrite (view pattern) ::view
+             (fn [sub-view sub-pattern sub-input]
+               `(let [~input ~sub-input]
+                  ~(sub-view sub-pattern))))))
 
 (declare walk-fn)
 
@@ -60,18 +79,12 @@
            (fn [sub-view sub-pattern sub-input]
              `(::call ~(new-fn fns (sub-view sub-pattern)) ~sub-input))))
 
-(defn view-indirect-out [pattern]
+(defn view-indirect [pattern]
   (let [fns (atom [])
         top (new-fn fns (view pattern))]
-    (rewrite `(letfn [~@@fns] ~top)
-             ::call
-             (fn [f arg]
-               `(~f ~arg)))))
-
-(defn view-indirect-in [pattern]
-  (let [fns (atom [])
-        top (new-fn fns (view pattern))]
-    (rewrite `(fn [~input] (letfn [~@@fns] (~top ~input)))
+    (rewrite `(fn [~input]
+                ~(with-locals pattern
+                   `(letfn [~@@fns] (~top ~input))))
              ::call
              (fn [f arg]
                `(~f ~arg)))))
@@ -82,8 +95,9 @@
         interface (gensym "IMatch")]
     (eval `(definterface ~interface ~@(for [[name args & _] @fns] `(~name [~@args]))))
     (rewrite `(fn [~input]
-                (let [r# (reify ~interface ~@(for [[name args & body] @fns] `(~name [~'this ~@args] ~@body)))]
-                  (~(symbol (str "." top)) r# ~input)))
+                ~(with-locals pattern
+                   `(let [r# (reify ~interface ~@(for [[name args & body] @fns] `(~name [~'this ~@args] ~@body)))]
+                     (~(symbol (str "." top)) r# ~input))))
              ::call
              (fn [f arg]
                `(~(symbol (str "." f)) ~'this ~arg)))))
@@ -96,15 +110,18 @@
   (def test (range 10000 10100))
 
   (def direct (eval `(fn [~input] ~(view-direct pat))))
-  (def indirect-out (eval (view-indirect-out pat)))
-  (def indirect-in (eval (view-indirect-in pat)))
+  (def indirect (eval (view-indirect pat)))
   (def reified (eval (view-reified pat)))
 
   (bench (= pat test)) ;; 5.797365 µs
   (bench (direct test)) ;; 34.865619 µs
-  (bench (indirect-out test)) ;; 7.035326 µs
-  (bench (indirect-in test)) ;; 12.458736 µs
+  (bench (indirect test)) ;; 12.458736 µs
   (bench (reified test)) ;;  6.413043 µs
 
+  (view-direct (Name. 'x (list 1 2 3)))
+  (view-indirect (Name. 'x (list 1 2 3)))
+  (view-reified (Name. 'x (list 1 2 3)))
+
   (view (list 1 2))
-  (seq->view (list 1 2)))
+  (seq->view (list 1 2))
+)

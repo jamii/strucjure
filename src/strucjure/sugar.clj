@@ -2,8 +2,7 @@
   (:refer-clojure :exclude [with-meta * + or and])
   (:require [plumbing.core :refer [fnk for-map aconcat]]
             [strucjure.util :refer [with-syms]]
-            [strucjure.pattern :as pattern :refer [->Rest ->Seqable ->Any ->Is ->Guard ->Name ->Or ->And ->Repeated ->WithMeta ->Node ->Edge ->Graph]]
-            [strucjure.graph :as graph]
+            [strucjure.pattern :as pattern :refer [->Rest ->Seqable ->Any ->Is ->Guard ->Name ->Or ->And ->Repeated ->WithMeta]]
             [strucjure.view :as view]))
 
 (def _ (->Any))
@@ -17,9 +16,6 @@
 (defn or [& patterns] (->Or (vec patterns)))
 (defn and [& patterns] (->And (vec patterns)))
 (defn seqable [& patterns] (->Seqable (vec patterns)))
-(def edge ->Edge)
-(def node ->Node)
-(def node-of ->Graph) ;; TODO poor naming?
 (def & ->Rest)
 (defn &* [pattern] (& (* pattern)))
 (defn &+ [pattern] (& (+ pattern)))
@@ -36,7 +32,7 @@
        form))
    form))
 
-(def overrides #{'_ 'is 'guard 'name '* '+ '? 'with-meta 'or 'and 'seqable 'edge 'node 'node-of 'graph '& '&* '&+ '&? '&*& '&+& '&?&})
+(def overrides #{'_ 'is 'guard 'name '* '+ '? 'with-meta 'or 'and 'seqable '& '&* '&+ '&? '&*& '&+& '&?&})
 
 (defn- with-overrides [form]
   (clojure.walk/prewalk
@@ -49,23 +45,15 @@
 (defmacro pattern [sugar]
   (with-overrides (with-names sugar)))
 
-(defmacro with-edges [names & body]
-  `(let [~@(interleave names (for [name names] `(->Edge '~name)))]
-     (do ~@body)))
+(defmacro match [input & patterns&outputs]
+  (assert (even? (count patterns&outputs)))
+  (let [pattern (pattern/->Or
+                 (for [[pattern output] (partition 2 patterns&outputs)]
+                   (pattern/->Output (eval `(pattern ~pattern)) output)))]
+    `(let [~view/input ~input] ~(view/view-direct pattern))))
 
-(defn- with-names-and-edges [names&sugars]
-  `(graph/with-named-nodes
-     (graph/with-named-edges
-       (with-edges [~@(take-nth 2 names&sugars)]
-         ~(for-map [[name sugar] (partition 2 names&sugars)] `'~name `(pattern ~sugar))))))
-
-(defmacro graph [& names&sugars]
-  (with-names-and-edges names&sugars))
-
-(defn prewalk [pattern names&fnks]
-  (view/with-layers [(view/with-pre-fns strucjure.pattern.Node names&fnks)]
-    (view/*view* pattern)))
-
-(defn postwalk [pattern names&fnks]
-  (view/with-layers [(view/with-post-fns strucjure.pattern.Node names&fnks)]
-    (view/*view* pattern)))
+(comment
+  (match (list 1 2 3)
+         (list 1 2) :fail
+         (list 1 (->Name 'x 2) 3) x)
+  )

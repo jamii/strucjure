@@ -8,6 +8,26 @@
            [strucjure.pattern Any Is Rest Guard Name Repeated WithMeta Or And Seqable Refer Where Output]
            [strucjure.view Failure]))
 
+;; FAILURE
+
+(def failure
+  (Failure. ""))
+
+(defmacro on-fail [t f]
+  `(try ~t
+        (catch Failure exc#
+          ~f)))
+
+(defmacro trap-failure [body]
+  `(try ~body
+        (catch Exception exc#
+          (if (instance? Failure exc#)
+            (throw (Exception. (str exc#)))
+            (throw exc#)))))
+
+(defmacro check [pred]
+  `(if-not ~pred (throw failure)))
+
 ;; SEMANTICS
 
 (defprotocol View
@@ -19,22 +39,30 @@
   (if-let [[first-pattern & next-pattern] pattern]
     `(cons (::view ~view ~first-pattern (first ~input))
        (::view ~seq->view ~next-pattern (next ~input)))
-    `(assert (nil? ~input))))
+    `(check (nil? ~input))))
 
 (extend-protocol-by-fn
  View
  (fn view [this]
    [Object]
-   `(do (assert (= '~this ~input))
+   `(do (check (= '~this ~input))
       '~this)
 
    [clojure.lang.ISeq]
-   `(do (assert (seq? ~input))
+   `(do (check (seq? ~input))
       (::view ~seq->view ~this ~input))))
+
+(defn or->view [patterns]
+  (assert (not (empty? patterns)) "OR patterns must not be empty")
+  (let [[first-pattern & next-pattern] patterns]
+    (if next-pattern
+      `(on-fail (::view ~view ~first-pattern ~input)
+                (::view ~or->view ~next-pattern ~input))
+      `(::view ~view ~first-pattern ~input))))
 
 (extend-protocol-by-fn
  View
- (fn view [{:keys [pattern name code] :as this}]
+ (fn view [{:keys [pattern patterns name code] :as this}]
    [Name]
    `(let [output# (::view ~view ~pattern ~input)]
       (.set ~name output#)
@@ -42,10 +70,14 @@
 
    [Output]
    `(do (::view ~view ~pattern ~input)
-      ~(postwalk-replace
-        (for-map [name (:bound-here (meta this))]
-                 name `(.x ~name)) ;; TODO this is crude - use the walk from proteus instead
-        code))
+      (trap-failure
+       ~(postwalk-replace
+         (for-map [name (:bound-here (meta this))]
+                  name `(.x ~name)) ;; TODO this is crude - use the walk from proteus instead
+         code)))
+
+   [Or]
+   `(::view ~or->view ~patterns ~input)
    ))
 
 ;; COMPILERS
@@ -101,10 +133,11 @@
         top (new-fn fns (view pattern))
         interface (gensym "IMatch")]
     (eval `(definterface ~interface ~@(for [[name args & _] @fns] `(~name [~@args]))))
-    (rewrite `(fn [~input]
-                ~(with-locals bound
-                   `(let [r# (reify ~interface ~@(for [[name args & body] @fns] `(~name [~'this ~@args] ~@body)))]
-                      (~(symbol (str "." top)) r# ~input))))
+    (rewrite (with-locals bound
+               `(let [r# (reify ~interface
+                           ~@(for [[name args & body] @fns]
+                               `(~name [~'this ~@args] ~@body)))]
+                  (~(symbol (str "." top)) r# ~input)))
              ::call
              (fn [f arg]
                `(~(symbol (str "." f)) ~'this ~arg)))))
@@ -113,23 +146,22 @@
 
 (comment
   (use 'criterium.core)
-  (def pat (range 10000 10100))
+  (def pat (concat (range 10000 10050) [(Name. 'x 10050)] (range 10051 10100)))
   (def test (range 10000 10100))
 
   (def direct (eval `(fn [~input] ~(view-direct pat))))
   (def indirect (eval (view-indirect pat)))
   (def reified (eval (view-reified pat)))
 
-  (bench (= pat test)) ;; 5.797365 µs
-  (bench (direct test)) ;; 34.865619 µs
-  (bench (indirect test)) ;; 12.458736 µs
-  (bench (reified test)) ;;  6.413043 µs
+  (= pat test) ;; 5.797365 µs
+  (direct test) ;; 34.865619 µs
+  (indirect test) ;; 12.458736 µs
+  (reified test) ;;  6.413043 µs
 
   (def named (Output. (list 1 (Name. 'x 2) 3) 'x))
   ((eval `(fn [~input] ~(view-direct named))) (list 1 2 3))
   ((eval (view-indirect named)) (list 1 2 3))
   ((eval (view-reified named)) (list 1 2 3))
-
   (view (list 1 2))
   (seq->view (list 1 2))
   )

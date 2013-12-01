@@ -22,7 +22,6 @@
 (defrecord WithMeta [pattern meta-pattern])
 (defrecord Or [patterns])
 (defrecord And [patterns])
-(defrecord Seqable [patterns])
 
 ;; recursive patterns
 (defrecord Refer [name])
@@ -41,7 +40,7 @@
    [IPersistentMap] (vals this)
    [Rest Guard Name Repeated Output] [(:pattern this)]
    [WithMeta] [(:pattern this) (:meta-pattern this)]
-   [Or And Seqable] (:patterns this))
+   [Or And] (:patterns this))
 
  (fn with-subpatterns [this subpatterns]
    [nil Object Any Is Refer Where] this
@@ -50,10 +49,10 @@
    [IPersistentMap] (zipmap (keys this) subpatterns)
    [Rest Guard Name Repeated Output] (assoc this :pattern (first subpatterns))
    [WithMeta] (assoc this :pattern (first subpatterns) :meta-pattern (second subpatterns))
-   [Or And Seqable] (assoc this :patterns subpatterns))
+   [Or And] (assoc this :patterns subpatterns))
 
  (fn bound [this]
-   [nil Object ISeq IPersistentVector IPersistentMap Any Is Rest Guard Repeated WithMeta Or And Seqable Refer Where Output] #{}
+   [nil Object ISeq IPersistentVector IPersistentMap Any Is Rest Guard Repeated WithMeta Or And Refer Where Output] #{}
    [Name] #{(:name this)}))
 
 (defn fmap [pattern f]

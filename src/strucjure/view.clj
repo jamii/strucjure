@@ -6,8 +6,22 @@
             [strucjure.pattern :as pattern]
             [proteus :refer [let-mutable]])
   (:import [clojure.lang ISeq IPersistentVector IPersistentMap]
-           [strucjure.pattern Any Is Rest Guard Name Repeated WithMeta Or And Seqable Refer Where Output]
+           [strucjure.pattern Any Is Rest Guard Name Repeated WithMeta Or And Refer Where Output]
            [strucjure.view Failure]))
+
+;; TODO
+;; parsing Rest Repeated seq->view
+;; recursive Refer Where
+
+;; INTERFACE
+
+(defprotocol View
+  (view [this]))
+
+(def input (gensym "input"))
+
+(defmacro let-input [value body]
+  `(let [~input ~value] ~body))
 
 ;; FAILURE
 
@@ -29,15 +43,7 @@
 (defmacro check [pred]
   `(if-not ~pred (throw failure)))
 
-;; SEMANTICS
-
-(defprotocol View
-  (view [this]))
-
-(def input (gensym "input"))
-
-(defmacro let-input [value body]
-  `(let [~input ~value] ~body))
+;; STRUCTURAL PATTERNS
 
 (defn seq->view [pattern]
   (if-let [[first-pattern & next-pattern] pattern]
@@ -45,17 +51,6 @@
       (let-input (first ~input) ~(view first-pattern))
       (let-input (next ~input) ~(seq->view next-pattern)))
     `(check (nil? ~input))))
-
-(extend-protocol-by-fn
- View
- (fn view [this]
-   [Object]
-   `(do (check (= '~this ~input))
-      '~this)
-
-   [clojure.lang.ISeq]
-   `(do (check (seq? ~input))
-      ~(seq->view this))))
 
 (defn or->view [patterns]
   (assert (not (empty? patterns)) "OR patterns must not be empty")
@@ -67,7 +62,38 @@
 
 (extend-protocol-by-fn
  View
- (fn view [{:keys [pattern patterns name code] :as this}]
+ (fn view [{:keys [pattern patterns meta-pattern name code f min-count max-count] :as this}]
+   [nil Object]
+   `(let [literal# '~this]
+      (check (= literal# ~input))
+      literal#)
+
+   [ISeq]
+   `(do (check (seq? ~input))
+      ~(seq->view this))
+
+   [IPersistentVector]
+   `(do (check (vector? ~input))
+      (let-input (seq ~input) ~(seq->view (seq this))))
+
+   [IPersistentMap]
+   `(do (check (map? ~input))
+      ~(for-map [[key pattern] this]
+                key
+                `(let-input (get ~input ~key) ~(view pattern))))
+
+   [Any]
+   input
+
+   [Is]
+   `(do (check (~f ~input))
+      input)
+
+   [Guard]
+   `(let [output# ~(view pattern)]
+      (check ~code)
+      output#)
+
    [Name]
    `(let [output# ~(view pattern)]
       (set! ~name output#)
@@ -79,15 +105,23 @@
 
    [Or]
    (or->view patterns)
-   ))
 
-;; COMPILERS
+   [And]
+   (do (assert (not (empty? patterns)) "AND patterns must not be empty")
+     `(do ~@(for [pattern patterns]
+               (view pattern))))
+
+   [WithMeta]
+   `(try-with-meta ~(view pattern)
+                   (let-input (meta ~input) ~(view meta-pattern)))))
+
+;; WRAPPER
 
 (defn with-locals [bound code]
   `(let-mutable [~@(interleave bound (repeat nil))]
      ~code))
 
-(defn view-direct [pattern]
+(defn view-with-locals [pattern]
   (let [[pattern bound] (pattern/with-bound pattern)]
     (with-locals bound (view pattern))))
 

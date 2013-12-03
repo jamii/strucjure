@@ -6,7 +6,6 @@
   (:import [clojure.lang ISeq IPersistentVector IPersistentMap]))
 
 ;; TODO Records
-;; TODO think carefully about seq vs list
 
 (defprotocol Pattern
   (subpatterns [this] "A list of subpatterns of this pattern (just children, not descendants)")
@@ -25,7 +24,7 @@
 
 ;; recursive patterns
 (defrecord Refer [name])
-(defrecord Where [pattern graph])
+(defrecord Let [refers pattern])
 
 ;; pseudo-patterns
 (defrecord Rest [pattern])
@@ -35,7 +34,7 @@
  Pattern
 
  (fn subpatterns [this]
-   [nil Object Any Is Refer Where] nil
+   [nil Object Any Is Refer Let] nil
    [ISeq IPersistentVector] this
    [IPersistentMap] (vals this)
    [Rest Guard Name Repeated Output] [(:pattern this)]
@@ -43,7 +42,7 @@
    [Or And] (:patterns this))
 
  (fn with-subpatterns [this subpatterns]
-   [nil Object Any Is Refer Where] this
+   [nil Object Any Is Refer Let] this
    [ISeq] (apply list subpatterns)
    [IPersistentVector] (vec subpatterns)
    [IPersistentMap] (zipmap (keys this) subpatterns)
@@ -52,7 +51,7 @@
    [Or And] (assoc this :patterns subpatterns))
 
  (fn bound [this]
-   [nil Object ISeq IPersistentVector IPersistentMap Any Is Rest Guard Repeated WithMeta Or And Refer Where Output] #{}
+   [nil Object ISeq IPersistentVector IPersistentMap Any Is Rest Guard Repeated WithMeta Or And Refer Let Output] #{}
    [Name] #{(:name this)}))
 
 (defn fmap [pattern f]

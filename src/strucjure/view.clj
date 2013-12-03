@@ -6,12 +6,12 @@
             [strucjure.pattern :as pattern]
             [proteus :refer [let-mutable]])
   (:import [clojure.lang ISeq IPersistentVector IPersistentMap]
-           [strucjure.pattern Any Is Rest Guard Name Repeated WithMeta Or And Refer Where Output]
+           [strucjure.pattern Any Is Rest Guard Name Repeated WithMeta Or And Refer Let Output]
            [strucjure.view Failure]))
 
 ;; TODO
 ;; parsing Rest Repeated seq->view
-;; recursive Refer Where
+;; recursive Refer Let
 
 ;; INTERFACE
 
@@ -22,6 +22,16 @@
 
 (defmacro let-input [value body]
   `(let [~input ~value] ~body))
+
+;; WRAPPER
+
+(defn with-locals [bound code]
+  `(let-mutable [~@(interleave bound (repeat nil))]
+     ~code))
+
+(defn view-with-locals [pattern info]
+  (let [[pattern bound] (pattern/with-bound pattern)]
+    (with-locals bound (view pattern info))))
 
 ;; FAILURE
 
@@ -68,12 +78,8 @@
       (check (= literal# ~input))
       literal#)
 
-   [ISeq]
-   `(do (check (seq? ~input))
-      ~(seq->view this info))
-
-   [IPersistentVector]
-   `(do (check (vector? ~input))
+   [ISeq IPersistentVector]
+   `(do (check (instance? clojure.lang.Seqable ~input))
       (let-input (seq ~input) ~(seq->view (seq this) info)))
 
    [IPersistentMap]
@@ -84,8 +90,8 @@
 
 (extend-protocol-by-fn
  View
- (fn view [{:keys [pattern patterns meta-pattern name code f min-count max-count] :as this}
-           info]
+ (fn view [{:keys [pattern patterns meta-pattern name code f min-count max-count refers] :as this}
+           {:keys [name->view] :as info}]
    [Any]
    input
 
@@ -117,15 +123,18 @@
 
    [WithMeta]
    `(try-with-meta ~(view pattern info)
-                   (let-input (meta ~input) ~(view meta-pattern info)))))
+                   (let-input (meta ~input) ~(view meta-pattern info)))
 
-;; WRAPPER
+   [Refer]
+   `(~(name->view name) ~input)
 
-(defn with-locals [bound code]
-  `(let-mutable [~@(interleave bound (repeat nil))]
-     ~code))
-
-(defn view-with-locals [pattern]
-  (let [[pattern bound] (pattern/with-bound pattern)
-        info {:name->view {}}]
-    (with-locals bound (view pattern info))))
+   [Let]
+   (let [name->view (merge name->view
+                           (for-map [[name pattern] refers]
+                                    name (gensym name)))
+         info (assoc info :name->view name->view)]
+     `(letfn [~@(for [[name pattern] refers]
+                  `(~(name->view name)
+                     [~input]
+                     ~(view-with-locals pattern info)))] ;; refers is not walked by pattern/with-bound, so it is scoped separately
+        ~(view pattern info)))))

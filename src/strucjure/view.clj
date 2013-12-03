@@ -16,7 +16,7 @@
 ;; INTERFACE
 
 (defprotocol View
-  (view [this]))
+  (view [this info]))
 
 (def input (gensym "input"))
 
@@ -45,24 +45,24 @@
 
 ;; STRUCTURAL PATTERNS
 
-(defn seq->view [pattern]
+(defn seq->view [pattern info]
   (if-let [[first-pattern & next-pattern] pattern]
     `(cons
-      (let-input (first ~input) ~(view first-pattern))
-      (let-input (next ~input) ~(seq->view next-pattern)))
+      (let-input (first ~input) ~(view first-pattern info))
+      (let-input (next ~input) ~(seq->view next-pattern info)))
     `(check (nil? ~input))))
 
-(defn or->view [patterns]
+(defn or->view [patterns info]
   (assert (not (empty? patterns)) "OR patterns must not be empty")
   (let [[first-pattern & next-pattern] patterns]
     (if next-pattern
-      `(on-fail ~(view first-pattern)
-                ~(or->view next-pattern))
-      (view first-pattern))))
+      `(on-fail ~(view first-pattern info)
+                ~(or->view next-pattern info))
+      (view first-pattern info))))
 
 (extend-protocol-by-fn
  View
- (fn view [{:keys [pattern patterns meta-pattern name code f min-count max-count] :as this}]
+ (fn view [this info]
    [nil Object]
    `(let [literal# '~this]
       (check (= literal# ~input))
@@ -70,18 +70,22 @@
 
    [ISeq]
    `(do (check (seq? ~input))
-      ~(seq->view this))
+      ~(seq->view this info))
 
    [IPersistentVector]
    `(do (check (vector? ~input))
-      (let-input (seq ~input) ~(seq->view (seq this))))
+      (let-input (seq ~input) ~(seq->view (seq this) info)))
 
    [IPersistentMap]
    `(do (check (map? ~input))
       ~(for-map [[key pattern] this]
                 key
-                `(let-input (get ~input ~key) ~(view pattern))))
+                `(let-input (get ~input ~key) ~(view pattern info))))))
 
+(extend-protocol-by-fn
+ View
+ (fn view [{:keys [pattern patterns meta-pattern name code f min-count max-count] :as this}
+           info]
    [Any]
    input
 
@@ -90,30 +94,30 @@
       input)
 
    [Guard]
-   `(let [output# ~(view pattern)]
+   `(let [output# ~(view pattern info)]
       (check ~code)
       output#)
 
    [Name]
-   `(let [output# ~(view pattern)]
+   `(let [output# ~(view pattern info)]
       (set! ~name output#)
       output#)
 
    [Output]
-   `(do ~(view pattern)
+   `(do ~(view pattern info)
       (trap-failure ~code))
 
    [Or]
-   (or->view patterns)
+   (or->view patterns info)
 
    [And]
    (do (assert (not (empty? patterns)) "AND patterns must not be empty")
      `(do ~@(for [pattern patterns]
-               (view pattern))))
+               (view pattern info))))
 
    [WithMeta]
-   `(try-with-meta ~(view pattern)
-                   (let-input (meta ~input) ~(view meta-pattern)))))
+   `(try-with-meta ~(view pattern info)
+                   (let-input (meta ~input) ~(view meta-pattern info)))))
 
 ;; WRAPPER
 
@@ -122,24 +126,6 @@
      ~code))
 
 (defn view-with-locals [pattern]
-  (let [[pattern bound] (pattern/with-bound pattern)]
-    (with-locals bound (view pattern))))
-
-;; BENCHMARKS
-
-(comment
-  (use 'criterium.core)
-
-  (def pat (range 10000 10100))
-  (def test (range 10000 10100))
-  (def test2 (range 10000 10100))
-
-  (def pat (Output. (list 1 (Name. 'x 2) 3) 'x))
-  (def test (list 1 2 3))
-  (def test2 (list 1 2 3))
-
-  (def direct (eval `(fn [~input] ~(view-direct pat))))
-
-  (= test test2)
-  (direct test)
-  )
+  (let [[pattern bound] (pattern/with-bound pattern)
+        info {:name->view {}}]
+    (with-locals bound (view pattern info))))

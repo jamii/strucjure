@@ -59,25 +59,37 @@
 
 (defmacro match [input & patterns&outputs]
   (let [pattern (eval `(case ~@patterns&outputs))]
-    `(let [~view/input ~input] ~(view/view-with-locals pattern {}))))
+    `(let [~view/input ~input] ~(view/view-top pattern))))
 
 (comment
+  (set! *warn-on-reflection* true)
+
   (= [1 2 3] [1 2 3])
 
   (match 1 ^x _ x)
 
   (match [1 2 3]
-         (list 1 2 3) :fail
-         [1 ^x _ 3] x)
+         [1 ^y _ 3] y)
 
   (match {:a 1 :b 2}
          {:c 1} :fail
          {:a 1 :b 2} :ok)
 
   (match [1 2]
-         (and ^x _ [1 ^y _]) [x y])
+         (and ^z _ [1 ^y _]) [z y])
 
   (match [1 2 3]
-         (guard [1 ^x _ ^y _] (= x y)) :fail
-         (guard [1 ^x _ ^y _] (= (inc x) y)) [x y])
+         (guard [1 ^z _ ^y _] (= z y)) :fail
+         (guard [1 ^z _ ^y _] (= (inc z) y)) [z y])
+
+  (match [1 2 3]
+         [1 (& ^z _)] z)
+
+  (match [1 2 3]
+         [1 ^z (& _)] z)
+
+  (match [1 2 3 4 5]
+         ^y [1 ^z (& [_ _]) ^w (& [_ _])] [y z w])
+
+
   )

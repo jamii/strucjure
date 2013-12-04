@@ -23,16 +23,6 @@
 (defmacro let-input [value body]
   `(let [~input ~value] ~body))
 
-;; WRAPPER
-
-(defn with-locals [bound code]
-  `(let-mutable [~@(interleave bound (repeat nil))]
-     ~code))
-
-(defn view-with-locals [pattern info]
-  (let [[pattern bound] (pattern/with-bound pattern)]
-    (with-locals bound (view pattern info))))
-
 ;; FAILURE
 
 (def failure
@@ -53,21 +43,61 @@
 (defmacro check [pred]
   `(if-not ~pred (throw failure)))
 
+;; REMAINING
+
+(def remaining
+  (gensym "remaining"))
+
+(defmacro get-remaining []
+  `(.x ~remaining))
+
+(defmacro set-remaining [value]
+  `(set! (.x ~remaining) ~value))
+
+(defmacro check-remaining [body]
+  `(let [output# ~body]
+     (check (nil? (get-remaining)))
+     output#))
+
+(defn rest? [pattern]
+  (or (instance? Rest pattern)
+      (and (instance? Name pattern)
+           (rest? (:pattern pattern)))))
+
+;; WRAPPER
+
+(defn view-with-locals [pattern info]
+  (let [[pattern bound] (pattern/with-bound pattern)]
+    `(let-mutable [~@(interleave bound (repeat nil))]
+                  ~(view pattern info))))
+
+(defn view-top [pattern]
+  `(let [~remaining (proteus.Containers$O. nil)]
+     ~(view-with-locals pattern {})))
+
 ;; STRUCTURAL PATTERNS
 
 (defn seq->view [pattern info]
   (if-let [[first-pattern & next-pattern] pattern]
-    `(cons
-      (let-input (first ~input) ~(view first-pattern info))
-      (let-input (next ~input) ~(seq->view next-pattern info)))
-    `(check (nil? ~input))))
+    (if (rest? first-pattern)
+      `(concat
+        ~(view first-pattern info)
+        (let-input (get-remaining)
+                   (do (set-remaining nil)
+                     ~(seq->view next-pattern info))))
+      `(cons
+        (let-input (first ~input) (check-remaining ~(view first-pattern info)))
+        (let-input (next ~input) ~(seq->view next-pattern info))))
+    `(do (set-remaining ~input)
+       nil)))
 
 (defn or->view [patterns info]
   (assert (not (empty? patterns)) "OR patterns must not be empty")
   (let [[first-pattern & next-pattern] patterns]
     (if next-pattern
       `(on-fail ~(view first-pattern info)
-                ~(or->view next-pattern info))
+                (do (set-remaining nil)
+                  ~(or->view next-pattern info)))
       (view first-pattern info))))
 
 (extend-protocol-by-fn
@@ -86,7 +116,7 @@
    `(do (check (map? ~input))
       ~(for-map [[key pattern] this]
                 key
-                `(let-input (get ~input ~key) ~(view pattern info))))))
+                `(let-input (get ~input ~key) (check-remaining ~(view pattern info)))))))
 
 (extend-protocol-by-fn
  View
@@ -119,14 +149,15 @@
    [And]
    (do (assert (not (empty? patterns)) "AND patterns must not be empty")
      `(do ~@(for [pattern patterns]
-               (view pattern info))))
+              `(do (set-remaining nil)
+                ~(view pattern info)))))
 
    [WithMeta]
    `(try-with-meta ~(view pattern info)
-                   (let-input (meta ~input) ~(view meta-pattern info)))
+                   (let-input (meta ~input) (check-remaining ~(view meta-pattern info))))
 
    [Refer]
-   `(~(name->view name) ~input)
+   `(~(name->view name) ~input ~remaining)
 
    [Let]
    (let [name->view (merge name->view
@@ -135,6 +166,9 @@
          info (assoc info :name->view name->view)]
      `(letfn [~@(for [[name pattern] refers]
                   `(~(name->view name)
-                     [~input]
+                     [~input ~remaining]
                      ~(view-with-locals pattern info)))] ;; refers is not walked by pattern/with-bound, so it is scoped separately
-        ~(view pattern info)))))
+        ~(view pattern info)))
+
+   [Rest]
+   (view pattern (assoc info :remaining? true))))

@@ -188,7 +188,7 @@
         (loop [~input (seq ~input)
                loop-output# []
                loop-count# 0]
-          (let [result# (on-fail (do (check (<= loop-count# ~max-count))
+          (let [result# (on-fail (do (check (< loop-count# ~max-count))
                                    ~(if (rest? pattern)
                                       (view pattern info)
                                       (view-first pattern info)))

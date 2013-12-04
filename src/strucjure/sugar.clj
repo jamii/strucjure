@@ -11,7 +11,7 @@
 (def name ->Name)
 (defn * [pattern] (->Repeated 0 Long/MAX_VALUE pattern))
 (defn + [pattern] (->Repeated 1 Long/MAX_VALUE pattern))
-(defn ? [pattern] (->Repeated 0 1 pattern))
+(defn ? [pattern] (->Repeated 1 1 pattern))
 (def with-meta ->WithMeta)
 (defn or [& patterns] (->Or (vec patterns)))
 (defn and [& patterns] (->And (vec patterns)))
@@ -105,4 +105,10 @@
 
   (match [1 2 1 2 1 2 3]
          ^w [^y (&*& [1 2]) ^z (& _)] [w y z])
+
+  (match [1 1 1]
+         (+ 1) :ok)
+
+  (match [1]
+         (? 1) :ok)
   )

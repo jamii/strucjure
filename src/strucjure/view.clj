@@ -59,10 +59,9 @@
      (check (nil? (get-remaining)))
      output#))
 
-(defn rest? [pattern]
-  (or (instance? Rest pattern)
-      (and (instance? Name pattern)
-           (rest? (:pattern pattern)))))
+(defmacro clear-remaining [body]
+  `(do (set-remaining nil)
+     ~body))
 
 ;; WRAPPER
 
@@ -73,7 +72,21 @@
 
 (defn view-top [pattern]
   `(let [~remaining (proteus.Containers$O. nil)]
-     ~(view-with-locals pattern {})))
+     (check-remaining ~(view-with-locals pattern {}))))
+
+;; UTILS
+
+(defn rest? [pattern]
+  (or (instance? Rest pattern)
+      (and (instance? Name pattern)
+           (rest? (:pattern pattern)))))
+
+(defn seqable? [input]
+  (or (nil? input) (instance? clojure.lang.Seqable input)))
+
+(defn view-first [pattern info]
+  `(do (check (not (nil? ~input)))
+     (let-input (first ~input) (check-remaining ~(view pattern info)))))
 
 ;; STRUCTURAL PATTERNS
 
@@ -82,22 +95,18 @@
     (if (rest? first-pattern)
       `(concat
         ~(view first-pattern info)
-        (let-input (get-remaining)
-                   (do (set-remaining nil)
-                     ~(seq->view next-pattern info))))
+        (let-input (get-remaining) (clear-remaining ~(seq->view next-pattern info))))
       `(cons
-        (let-input (first ~input) (check-remaining ~(view first-pattern info)))
+        ~(view-first first-pattern info)
         (let-input (next ~input) ~(seq->view next-pattern info))))
-    `(do (set-remaining ~input)
-       nil)))
+    `(do (set-remaining ~input) nil)))
 
 (defn or->view [patterns info]
   (assert (not (empty? patterns)) "OR patterns must not be empty")
   (let [[first-pattern & next-pattern] patterns]
     (if next-pattern
       `(on-fail ~(view first-pattern info)
-                (do (set-remaining nil)
-                  ~(or->view next-pattern info)))
+                (clear-remaining ~(or->view next-pattern info)))
       (view first-pattern info))))
 
 (extend-protocol-by-fn
@@ -109,7 +118,7 @@
       literal#)
 
    [ISeq IPersistentVector]
-   `(do (check (instance? clojure.lang.Seqable ~input))
+   `(do (check (seqable? ~input))
       (let-input (seq ~input) ~(seq->view (seq this) info)))
 
    [IPersistentMap]
@@ -117,6 +126,8 @@
       ~(for-map [[key pattern] this]
                 key
                 `(let-input (get ~input ~key) (check-remaining ~(view pattern info)))))))
+
+;; LOGICAL PATTERNS
 
 (extend-protocol-by-fn
  View
@@ -127,7 +138,7 @@
 
    [Is]
    `(do (check (~f ~input))
-      input)
+      ~input)
 
    [Guard]
    `(let [output# ~(view pattern info)]
@@ -149,8 +160,7 @@
    [And]
    (do (assert (not (empty? patterns)) "AND patterns must not be empty")
      `(do ~@(for [pattern patterns]
-              `(do (set-remaining nil)
-                ~(view pattern info)))))
+              `(clear-remaining ~(view pattern info)))))
 
    [WithMeta]
    `(try-with-meta ~(view pattern info)
@@ -171,4 +181,23 @@
         ~(view pattern info)))
 
    [Rest]
-   (view pattern (assoc info :remaining? true))))
+   (view pattern (assoc info :remaining? true))
+
+   [Repeated]
+   `(do (check (seqable? ~input))
+        (loop [~input (seq ~input)
+               loop-output# []
+               loop-count# 0]
+          (let [result# (on-fail (do (check (<= loop-count# ~max-count))
+                                   ~(if (rest? pattern)
+                                      (view pattern info)
+                                      (view-first pattern info)))
+                                 failure)]
+            (if (identical? failure result#)
+              (do (check (>= loop-count# ~min-count))
+                (set-remaining ~input)
+                (seq loop-output#))
+              (recur
+               ~(if (rest? pattern) `(let [remaining# (get-remaining)] (set-remaining nil) remaining#) `(next ~input))
+               (~(if (rest? pattern) 'into 'conj) loop-output# result#)
+               (unchecked-inc loop-count#))))))))

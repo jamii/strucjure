@@ -22,6 +22,9 @@
 (defn &*& [pattern] (& (* (& pattern))))
 (defn &+& [pattern] (& (+ (& pattern))))
 (defn &?& [pattern] (& (? (& pattern))))
+(defn *& [pattern] (* (& pattern)))
+(defn +& [pattern] (+ (& pattern)))
+(defn ?& [pattern] (? (& pattern)))
 
 (defn- with-names [form]
   (clojure.walk/prewalk
@@ -91,5 +94,15 @@
   (match [1 2 3 4 5]
          ^y [1 ^z (& [_ _]) ^w (& [_ _])] [y z w])
 
+  (match [1 2]
+         ^z (* (is integer?)) z)
 
+  (match [1 2 1 2 1 2]
+         ^z (*& [1 2]) z)
+
+  (match [1 2 1 2 1 2 3]
+         ^z (*& [1 2]) z)
+
+  (match [1 2 1 2 1 2 3]
+         ^w [^y (&*& [1 2]) ^z (& _)] [w y z])
   )

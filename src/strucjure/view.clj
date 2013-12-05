@@ -66,8 +66,8 @@
 
 (defn view-with-locals [pattern info]
   (let [[pattern bound] (pattern/with-bound pattern)]
-    `(let-mutable [~@(interleave bound (repeat nil))]
-                  ~(view pattern info))))
+    `(let [~@(interleave bound (repeat `(proteus.Containers$O. nil)))]
+       ~(view pattern info))))
 
 (defn view-top [pattern]
   `(let [~remaining (proteus.Containers$O. nil)]
@@ -86,6 +86,12 @@
 (defn view-first [pattern info]
   `(do (check (not (nil? ~input)))
      (let-input (first ~input) (check-remaining ~(view pattern info)))))
+
+(defn let-bound [bound code]
+  `(let [~@(aconcat
+            (for [name bound]
+              [name `(.x ~name)]))]
+     ~code))
 
 ;; STRUCTURAL PATTERNS
 
@@ -141,17 +147,17 @@
 
    [Guard]
    `(let [output# ~(view pattern info)]
-      (check ~code)
+      (check ~(let-bound (:bound-here (meta this)) code))
       output#)
 
    [Name]
    `(let [output# ~(view pattern info)]
-      (set! ~name output#)
+      (.set ~name output#)
       output#)
 
    [Output]
    `(do ~(view pattern info)
-      (trap-failure ~code))
+      (trap-failure ~(let-bound (:bound-here (meta this)) code)))
 
    [Or]
    (or->view patterns info)

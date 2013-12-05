@@ -56,11 +56,9 @@
   `(set! (.x ~remaining) ~value))
 
 (defmacro check-remaining [pattern body]
-  (if (clojure.walk/postwalk (fn [form] (if (coll? form) (every? true? form) (= `set-remaining form))) body)
-    `(let [output# ~body]
-       (check (nil? (get-remaining)) ~pattern)
-       output#)
-    body))
+  `(let [output# ~body]
+     (check (nil? (get-remaining)) ~pattern)
+     output#))
 
 (defmacro clear-remaining [body]
   `(do (set-remaining nil)
@@ -180,7 +178,7 @@
      (let-input (meta ~input) (check-remaining ~meta-pattern ~(view meta-pattern info))))
 
    [Refer]
-   `(~(name->view name) ~input ~remaining)
+   `(~(name->view name) ~input)
 
    [Let]
    (let [name->view (merge name->view
@@ -189,7 +187,7 @@
          info (assoc info :name->view name->view)]
      `(letfn [~@(for [[name pattern] refers]
                   `(~(name->view name)
-                     [~input ~remaining]
+                     [~input]
                      ~(view-with-locals pattern info)))] ;; refers is not walked by pattern/with-bound, so it is scoped separately
         ~(view pattern info)))
 

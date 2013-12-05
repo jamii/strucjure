@@ -29,6 +29,10 @@
 (defrecord Rest [pattern])
 (defrecord Output [pattern code])
 (defrecord Total [pattern]) ;; this is a hack, and a sign that the parsing implementation is probably stupid
+(defrecord Trace [name pattern])
+
+(defn walk [pattern f]
+  (with-subpatterns pattern (map f (subpatterns pattern))))
 
 (extend-protocol-by-fn
  Pattern
@@ -37,7 +41,7 @@
    [nil Object Any Is Refer] nil
    [ISeq IPersistentVector] this
    [IPersistentMap] (vals this)
-   [Rest Guard Name Repeated Output Let Total] [(:pattern this)]
+   [Rest Guard Name Repeated Output Let Total Trace] [(:pattern this)]
    [WithMeta] [(:pattern this) (:meta-pattern this)]
    [Or And] (:patterns this))
 
@@ -46,12 +50,12 @@
    [ISeq] (apply list subpatterns)
    [IPersistentVector] (vec subpatterns)
    [IPersistentMap] (zipmap (keys this) subpatterns)
-   [Rest Guard Name Repeated Output Let Total] (assoc this :pattern (first subpatterns))
+   [Rest Guard Name Repeated Output Let Total Trace] (assoc this :pattern (first subpatterns))
    [WithMeta] (assoc this :pattern (first subpatterns) :meta-pattern (second subpatterns))
    [Or And] (assoc this :patterns subpatterns))
 
  (fn bound [this]
-   [nil Object ISeq IPersistentVector IPersistentMap Any Is Rest Guard Repeated WithMeta Or And Refer Let Output Total] #{}
+   [nil Object ISeq IPersistentVector IPersistentMap Any Is Rest Guard Repeated WithMeta Or And Refer Let Output Total Trace] #{}
    [Name] #{(:name this)}))
 
 (defn with-bound [pattern]

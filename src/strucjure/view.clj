@@ -5,7 +5,7 @@
             [strucjure.pattern :as pattern]
             [proteus :refer [let-mutable]])
   (:import [clojure.lang ISeq IPersistentVector IPersistentMap]
-           [strucjure.pattern Any Is Rest Guard Name Repeated WithMeta Or And Refer Let Output Total]
+           [strucjure.pattern Any Is Rest Guard Name Repeated WithMeta Or And Refer Let Output Total Trace]
            [strucjure.view Failure]))
 
 ;; TODO
@@ -95,6 +95,9 @@
             (for [name bound]
               [name `(.x ~name)]))]
      ~code))
+
+(def depth
+  (gensym "depth"))
 
 ;; STRUCTURAL PATTERNS
 
@@ -214,4 +217,17 @@
                (unchecked-inc loop-count#))))))
 
    [Total]
-   `(check-remaining ~pattern ~(view pattern info))))
+   `(check-remaining ~pattern ~(view pattern info))
+
+   [Trace]
+   `(do (.set ~depth (inc (.x ~depth)))
+      (println (apply str (repeat (.x ~depth) " ")) "=>" ~name ~input)
+      (try
+        (let [output# ~(view pattern info)]
+          (println (apply str (repeat (.x ~depth) " ")) "<=" ~name output#)
+          (.set ~depth (dec (.x ~depth)))
+          output#)
+        (catch Exception exc#
+          (println (apply str (repeat (.x ~depth) " ")) "XX" ~name (pr-str exc#))
+          (.set ~depth (dec (.x ~depth)))
+          (throw exc#))))))

@@ -1,8 +1,9 @@
 (ns strucjure.sugar
   (:refer-clojure :exclude [with-meta * + or and])
   (:require [plumbing.core :refer [fnk for-map aconcat]]
-            [strucjure.pattern :as pattern :refer [->Rest ->Any ->Is ->Guard ->Name ->Or ->And ->Repeated ->WithMeta ->Output ->Let ->Refer ->Total]]
-            [strucjure.view :as view]))
+            [strucjure.pattern :as pattern :refer [->Rest ->Any ->Is ->Guard ->Name ->Or ->And ->Repeated ->WithMeta ->Output ->Let ->Refer ->Total ->Trace]]
+            [strucjure.view :as view])
+  (:import [strucjure.pattern Let]))
 
 (def _ (->Any))
 (defmacro is [f] `(->Is '~f))
@@ -65,6 +66,19 @@
   (let [pattern (eval `(case ~@patterns&outputs))]
     `(let [~view/input ~input] ~(view/view-top pattern))))
 
+(defn trace-let [pattern]
+  (if (instance? Let pattern)
+    (assoc (pattern/walk pattern trace-let)
+      :refers (for-map [[name pattern] (:refers pattern)] name
+                       (->Trace (str name) (trace-let pattern))))
+    (pattern/walk pattern trace-let)))
+
+(defmacro trace [input & patterns&outputs]
+  (let [pattern (trace-let (eval `(case ~@patterns&outputs)))]
+    `(let [~view/input ~input
+           ~view/depth (proteus.Containers$O. 0)]
+       ~(view/view-top pattern))))
+
 (comment
   (set! *warn-on-reflection* true)
 
@@ -72,6 +86,12 @@
 
   (match (list 1 2 3)
          (list 1 2 3))
+
+  (match (list 1 2 3)
+         (list 1 2 3) :ok)
+
+  (match (list 1 2 3)
+         (or (list 1 2 3) _))
 
   (match (list 1 2)
          (list 1) :fail
@@ -110,8 +130,9 @@
          ^z (*& [1 2]) z)
 
   (match [1 2 1 2 1 2 3]
-         (*& [1 2]) :fail
-         _ :ok)
+         (*& [1 2]) :fail)
+
+
 
   (match [1 2 1 2 1 2 3]
          ^w [^y (&*& [1 2]) ^z (& _)] [w y z])
@@ -132,23 +153,61 @@
          (letp [i (is integer?)]
                (* i)))
 
+  (match '(succ (succ (succ zero)))
+         (letp [num (or succ zero)
+                succ (case ['succ num] (inc num))
+                zero (case 'zero 0)]
+               num))
+
+  (trace '(succ (succ (succ zero)))
+         (letp [num (or succ zero)
+                succ (case ['succ num] (inc num))
+                zero (case 'zero 0)]
+               num))
 
   (doall (for [[a b] (partition 2 (range 10))]
            (clojure.core/+ a b)))
 
+  (defn f [input]
+    (match input
+           (*& (output [^a _ ^b _] (list (clojure.core/+ a b))))))
+
+  (f (range 9))
+
+  (defn g []
+    (letfn [(sum-pairs
+             ([] nil)
+             ([a b & rest] (cons (clojure.core/+ a b) (apply sum-pairs rest))))]
+      (apply sum-pairs (range 10))))
+
+  (g)
+
+  (defn sum-pairs [pairs]
+    (if-let [[a b & rest] pairs]
+      (cons (clojure.core/+ a b) (sum-pairs rest))
+      nil))
+
+  (sum-pairs (range 10))
+
+  (defn j [input]
+    (match input
+           [^a _ ^b _ ^rest (& _)] (cons (clojure.core/+ a b) (j rest))
+           [] nil))
+
+  (j (range 10))
+
+  (let [acc (java.util.ArrayList.)]
+    (loop [input (range 10)]
+      (if-let [[a b & rest] input]
+        (do (.add acc (clojure.core/+ a b)) (recur rest))
+        (seq acc))))
+
   (match (range 10)
-         (*& (output [^a _ ^b _] (list (clojure.core/+ a b)))))
+         (letp [i (case [^a _ ^b _ (& i)] (cons (clojure.core/+ a b) i)
+                    [] nil)]
+               i))
 
-  (letfn [(sum-pairs
-           ([] nil)
-           ([a b & rest] (cons (clojure.core/+ a b) (apply sum-pairs rest))))]
-    (apply sum-pairs (range 10)))
 
-  (letfn [(sum-pairs [pairs]
-                     (if-let [[a b & rest] pairs]
-                       (cons (clojure.core/+ a b) (sum-pairs rest))
-                       nil))]
-    (sum-pairs (range 10)))
 
 
   )

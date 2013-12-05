@@ -5,7 +5,7 @@
             [strucjure.pattern :as pattern]
             [proteus :refer [let-mutable]])
   (:import [clojure.lang ISeq IPersistentVector IPersistentMap]
-           [strucjure.pattern Any Is Rest Guard Name Repeated WithMeta Or And Refer Let Output]
+           [strucjure.pattern Any Is Rest Guard Name Repeated WithMeta Or And Refer Let Output Total]
            [strucjure.view Failure]))
 
 ;; TODO
@@ -73,8 +73,9 @@
        ~(view pattern info))))
 
 (defn view-top [pattern]
-  `(let [~remaining (proteus.Containers$O. nil)]
-     (check-remaining ~(view-with-locals pattern {}))))
+  `(let [~last-failure (proteus.Containers$O. nil)
+         ~remaining (proteus.Containers$O. nil)]
+     ~(view-with-locals pattern {})))
 
 ;; UTILS
 
@@ -208,4 +209,7 @@
               (recur
                ~(if (rest? pattern) `(let [remaining# (get-remaining)] (set-remaining nil) remaining#) `(next ~input))
                (~(if (rest? pattern) 'into 'conj) loop-output# result#)
-               (unchecked-inc loop-count#))))))))
+               (unchecked-inc loop-count#))))))
+
+   [Total]
+   `(check-remaining ~(view pattern info))))

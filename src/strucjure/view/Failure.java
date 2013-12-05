@@ -25,7 +25,7 @@ public class Failure extends Exception {
   }
 
   public void getMessage(StringBuilder builder) {
-    builder.append("Failed test " + test + " in pattern " + pattern + " on input " + prstr.invoke(input) + "\n");
+    builder.append("\nFailed test " + test + " in pattern " + pattern + " on input " + prstr.invoke(input));
     if (lastFailure != null)
       lastFailure.getMessage(builder);
   }

@@ -1,7 +1,7 @@
 (ns strucjure.sugar
   (:refer-clojure :exclude [with-meta * + or and])
   (:require [plumbing.core :refer [fnk for-map aconcat]]
-            [strucjure.pattern :as pattern :refer [->Rest ->Any ->Is ->Guard ->Name ->Or ->And ->Repeated ->WithMeta ->Output ->Let ->Refer]]
+            [strucjure.pattern :as pattern :refer [->Rest ->Any ->Is ->Guard ->Name ->Or ->And ->Repeated ->WithMeta ->Output ->Let ->Refer ->Total]]
             [strucjure.view :as view]))
 
 (def _ (->Any))
@@ -48,9 +48,9 @@
 
 (defmacro case [& patterns&outputs]
   (cond
-   (= 1 (count patterns&outputs)) `(pattern ~(first patterns&outputs))
+   (= 1 (count patterns&outputs)) `(->Total (pattern ~(first patterns&outputs)))
    (even? (count patterns&outputs)) `(->Or [~@(for [[pattern output] (partition 2 patterns&outputs)]
-                                                `(->Output (pattern ~pattern) '~output))])))
+                                                `(->Output (->Total (pattern ~pattern)) '~output))])))
 
 (defmacro letp [names&patterns & patterns&outputs]
   `(let [~@(aconcat
@@ -70,6 +70,10 @@
 
   (match (list 1 2 3)
          (list 1 2 3))
+
+  (match (list 1 2)
+         (list 1) :fail
+         2 :fail)
 
   (match 1 ^x _ x)
 

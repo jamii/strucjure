@@ -5,7 +5,7 @@
             [strucjure.pattern :as pattern]
             [proteus :refer [let-mutable]])
   (:import [clojure.lang ISeq IPersistentVector IPersistentMap]
-           [strucjure.pattern Any Is Rest Guard Name Repeated WithMeta Or And Refer Let Output Total Trace]
+           [strucjure.pattern Any Is Rest Guard Name Repeated WithMeta Or And Refer Let Output Trace]
            [strucjure.view Failure]))
 
 ;; TODO
@@ -46,6 +46,10 @@
 
 ;; REMAINING
 
+;; Invariants:
+;; remaining is always nil at start of pattern
+;; if remaining? is false then the pattern may not set remaining
+
 (def remaining
   (gensym "remaining"))
 
@@ -53,16 +57,18 @@
   `(.x ~remaining))
 
 (defmacro set-remaining [value]
-  `(set! (.x ~remaining) ~value))
+  `(.set ~remaining ~value))
 
-(defmacro check-remaining [pattern body]
-  `(let [output# ~body]
-     (check (nil? (get-remaining)) ~pattern)
-     output#))
+(defmacro pass-remaining [remaining? value pattern]
+  (cond
+   remaining? `(set-remaining ~value)
+   value `(check (nil? ~value) ~pattern)))
 
-(defmacro clear-remaining [body]
-  `(do (set-remaining nil)
-     ~body))
+(defmacro clear-remaining [remaining? body]
+  (if remaining?
+    `(do (set-remaining nil)
+       ~body)
+    body))
 
 ;; WRAPPER
 
@@ -74,7 +80,7 @@
 (defn view-top [pattern]
   `(let [~last-failure (proteus.Containers$O. nil)
          ~remaining (proteus.Containers$O. nil)]
-     ~(view-with-locals pattern {:name->view {} :output? true})))
+     ~(view-with-locals pattern {:name->view {} :output? true :remaining? false})))
 
 ;; UTILS
 
@@ -88,7 +94,7 @@
 
 (defn view-first [pattern info]
   `(do (check (not (nil? ~input)) ~pattern)
-     (let-input (first ~input) (check-remaining ~pattern ~(view pattern info)))))
+     (let-input (first ~input) ~(view pattern (assoc info :remaining? false)))))
 
 (defn let-bound [bound code]
   `(let [~@(aconcat
@@ -101,23 +107,25 @@
 
 ;; STRUCTURAL PATTERNS
 
-(defn seq->view [pattern {:keys [output?] :as info}]
+(defn seq->view [pattern {:keys [output? remaining?] :as info}]
   (if-let [[first-pattern & next-pattern] pattern]
     (if (rest? first-pattern)
       `(~(if output? 'concat 'do)
         ~(view first-pattern info)
-        (let-input (get-remaining) (clear-remaining ~(seq->view next-pattern info))))
+        (let-input (get-remaining) (clear-remaining true ~(seq->view next-pattern info))))
       `(~(if output? 'cons 'do)
         ~(view-first first-pattern info)
         (let-input (next ~input) ~(seq->view next-pattern info))))
-    `(do (set-remaining ~input) nil)))
+    `(do (pass-remaining ~remaining? ~input ~pattern) nil)))
 
-(defn or->view [patterns info]
+(defn or->view [patterns {:keys [remaining?] :as info}]
   (assert (not (empty? patterns)) "OR patterns must not be empty")
+  (let [bindings (for [pattern patterns] (let [[_ bound] (pattern/with-bound pattern)] bound))]
+    (assert (every? #(= (first bindings) %) bindings) "All branches of an Or pattern must have the same bound variables"))
   (let [[first-pattern & next-pattern] patterns]
     (if next-pattern
       `(on-fail ~(view first-pattern info)
-                (clear-remaining ~(or->view next-pattern info)))
+                (clear-remaining remaining? ~(or->view next-pattern info)))
       (view first-pattern info))))
 
 (extend-protocol-by-fn
@@ -136,7 +144,7 @@
    `(do (check (map? ~input) ~this)
       ~(let [map (for-map [[key pattern] this]
                           key
-                          `(let-input (get ~input ~key) (check-remaining ~pattern ~(view pattern info))))]
+                          `(let-input (get ~input ~key) ~(view pattern (assoc info :remaining? false))))]
          (if output? map `(do ~@(vals map)))))))
 
 ;; LOGICAL PATTERNS
@@ -144,7 +152,7 @@
 (extend-protocol-by-fn
  View
  (fn view [{:keys [pattern patterns meta-pattern name code f min-count max-count refers] :as this}
-           {:keys [name->view output?] :as info}]
+           {:keys [name->view output? remaining?] :as info}]
    [Any]
    input
 
@@ -172,13 +180,13 @@
    [And]
    (do (assert (not (empty? patterns)) "AND patterns must not be empty")
      `(do ~@(for [pattern patterns]
-              `(clear-remaining ~(view pattern info)))))
+              `(clear-remaining remaining? ~(view pattern info)))))
 
    [WithMeta]
    `(~(if output? 'try-with-meta 'do)
      ~(view pattern info)
 
-     (let-input (meta ~input) (check-remaining ~meta-pattern ~(view meta-pattern info))))
+     (let-input (meta ~input) ~(view meta-pattern (assoc info :remaining? false))))
 
    [Refer]
    `(~(name->view name) ~input)
@@ -209,15 +217,12 @@
                                  failure)]
             (if (identical? failure result#)
               (do (check (>= loop-count# ~min-count) ~this)
-                (set-remaining ~input)
+                (pass-remaining ~remaining? ~input ~this)
                 (seq loop-output#))
               (recur
                ~(if (rest? pattern) `(let [remaining# (get-remaining)] (set-remaining nil) remaining#) `(next ~input))
                (~(if output? (if (rest? pattern) 'into 'conj) 'comment) loop-output# result#)
                (unchecked-inc loop-count#))))))
-
-   [Total]
-   `(check-remaining ~pattern ~(view pattern info))
 
    [Trace]
    `(do (.set ~depth (inc (.x ~depth)))

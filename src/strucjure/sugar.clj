@@ -120,7 +120,4 @@
   (match [1 2 3]
          (letp [i (is integer?)]
                (* i)))
-
-  (pattern/with-bound (letp [i (is integer?)]
-                           (* i)))
   )

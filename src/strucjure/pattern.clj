@@ -9,7 +9,7 @@
 (defprotocol Pattern
   (subpatterns [this] "A list of subpatterns of this pattern (just children, not descendants)")
   (with-subpatterns [this subpatterns] "Replace the subpatterns of this pattern, preserving metadata (if the number of subpatterns is wrong the behaviour is unspecified)")
-  (bound [this] "Which names are bound by this pattern (not subpatterns))"))
+  (bound [this] "Which names are bound by this pattern (not by subpatterns))"))
 
 ;; patterns
 (defrecord Any [])
@@ -52,15 +52,6 @@
  (fn bound [this]
    [nil Object ISeq IPersistentVector IPersistentMap Any Is Rest Guard Repeated WithMeta Or And Refer Let Output] #{}
    [Name] #{(:name this)}))
-
-(defn fmap [pattern f]
-  (try-with-meta (with-subpatterns pattern (map f (subpatterns pattern))) (meta pattern)))
-
-(defn prewalk [pattern f]
-  (fmap (f pattern) #(prewalk % f)))
-
-(defn postwalk [pattern f]
-  (f (fmap pattern #(postwalk % f))))
 
 (defn with-bound [pattern]
   (let [subpatterns&bound-below (map with-bound (subpatterns pattern))

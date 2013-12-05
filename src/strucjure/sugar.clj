@@ -1,7 +1,6 @@
 (ns strucjure.sugar
   (:refer-clojure :exclude [with-meta * + or and])
   (:require [plumbing.core :refer [fnk for-map aconcat]]
-            [strucjure.util :refer [with-syms]]
             [strucjure.pattern :as pattern :refer [->Rest ->Any ->Is ->Guard ->Name ->Or ->And ->Repeated ->WithMeta ->Output ->Let ->Refer]]
             [strucjure.view :as view]))
 
@@ -57,8 +56,8 @@
   `(let [~@(aconcat
             (for [[name pattern] (partition 2 names&patterns)]
               [name `(->Name '~name (->Refer '~name))]))]
-     (->Let ~(for-map [[name pattern] names&patterns] `'~name pattern)
-            (case ~patterns&outputs))))
+     (->Let ~(for-map [[name pattern] (partition 2 names&patterns)] `'~name `(pattern ~pattern))
+            (case ~@patterns&outputs))))
 
 (defmacro match [input & patterns&outputs]
   (let [pattern (eval `(case ~@patterns&outputs))]
@@ -109,6 +108,19 @@
   (match [1 1 1]
          (+ 1) :ok)
 
+  (match []
+         (* 1) :ok)
+
   (match [1]
          (? 1) :ok)
+
+  (match [1 2 3]
+         (* (is integer?)))
+
+  (match [1 2 3]
+         (letp [i (is integer?)]
+               (* i)))
+
+  (pattern/with-bound (letp [i (is integer?)]
+                           (* i)))
   )

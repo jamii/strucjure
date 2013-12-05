@@ -1,8 +1,7 @@
 (ns strucjure.pattern
-  (:refer-clojure :exclude [assert])
   (:require [clojure.set :refer [union difference]]
             [plumbing.core :refer [for-map aconcat map-vals fnk]]
-            [strucjure.util :refer [assert extend-protocol-by-fn fnk->args try-vary-meta try-with-meta]])
+            [strucjure.util :refer [extend-protocol-by-fn try-vary-meta try-with-meta]])
   (:import [clojure.lang ISeq IPersistentVector IPersistentMap]))
 
 ;; TODO Records
@@ -34,19 +33,19 @@
  Pattern
 
  (fn subpatterns [this]
-   [nil Object Any Is Refer Let] nil
+   [nil Object Any Is Refer] nil
    [ISeq IPersistentVector] this
    [IPersistentMap] (vals this)
-   [Rest Guard Name Repeated Output] [(:pattern this)]
+   [Rest Guard Name Repeated Output Let] [(:pattern this)]
    [WithMeta] [(:pattern this) (:meta-pattern this)]
    [Or And] (:patterns this))
 
  (fn with-subpatterns [this subpatterns]
-   [nil Object Any Is Refer Let] this
+   [nil Object Any Is Refer] this
    [ISeq] (apply list subpatterns)
    [IPersistentVector] (vec subpatterns)
    [IPersistentMap] (zipmap (keys this) subpatterns)
-   [Rest Guard Name Repeated Output] (assoc this :pattern (first subpatterns))
+   [Rest Guard Name Repeated Output Let] (assoc this :pattern (first subpatterns))
    [WithMeta] (assoc this :pattern (first subpatterns) :meta-pattern (second subpatterns))
    [Or And] (assoc this :patterns subpatterns))
 

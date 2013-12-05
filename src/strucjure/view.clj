@@ -1,8 +1,7 @@
 (ns strucjure.view
-  (:refer-clojure :exclude [assert])
   (:require [clojure.walk :refer [prewalk postwalk-replace]]
             [plumbing.core :refer [aconcat for-map]]
-            [strucjure.util :refer [with-syms assert fnk->pos-fn fnk->args extend-protocol-by-fn try-with-meta]]
+            [strucjure.util :refer [extend-protocol-by-fn try-with-meta]]
             [strucjure.pattern :as pattern]
             [proteus :refer [let-mutable]])
   (:import [clojure.lang ISeq IPersistentVector IPersistentMap]
@@ -26,7 +25,7 @@
 ;; FAILURE
 
 (def failure
-  (Failure. ""))
+  (Failure. "Internal failure" nil))
 
 (defmacro on-fail [t f]
   `(try ~t

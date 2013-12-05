@@ -25,6 +25,8 @@
 (defn +& [pattern] (+ (& pattern)))
 (defn ?& [pattern] (? (& pattern)))
 
+(defmacro output [pattern code] `(->Output ~pattern '~code))
+
 (defn- with-names [form]
   (clojure.walk/prewalk
    (fn [form]
@@ -73,7 +75,8 @@
 
   (match (list 1 2)
          (list 1) :fail
-         2 :fail)
+         2 :fail
+         (list 1 3) :fail)
 
   (match 1 ^x _ x)
 
@@ -128,5 +131,24 @@
   (match [1 2 3]
          (letp [i (is integer?)]
                (* i)))
+
+
+  (doall (for [[a b] (partition 2 (range 10))]
+           (clojure.core/+ a b)))
+
+  (match (range 10)
+         (*& (output [^a _ ^b _] (list (clojure.core/+ a b)))))
+
+  (letfn [(sum-pairs
+           ([] nil)
+           ([a b & rest] (cons (clojure.core/+ a b) (apply sum-pairs rest))))]
+    (apply sum-pairs (range 10)))
+
+  (letfn [(sum-pairs [pairs]
+                     (if-let [[a b & rest] pairs]
+                       (cons (clojure.core/+ a b) (sum-pairs rest))
+                       nil))]
+    (sum-pairs (range 10)))
+
 
   )

@@ -40,9 +40,9 @@
             (throw (Exception. (str exc#)))
             (throw exc#)))))
 
-(defmacro check [pred] ;; TODO pattern in here
+(defmacro check [pred pattern]
   `(when-not ~pred
-     (throw (Failure. ~(pr-str pred) ~(pr-str "<pattern>") ~input (.x ~last-failure)))))
+     (throw (Failure. ~(pr-str pred) ~(pr-str pattern) ~input (.x ~last-failure)))))
 
 ;; REMAINING
 
@@ -55,10 +55,9 @@
 (defmacro set-remaining [value]
   `(set! (.x ~remaining) ~value))
 
-(defmacro check-remaining [body]
+(defmacro check-remaining [pattern body]
   `(let [output# ~body]
-     (when-not (nil? (get-remaining))
-       (throw (Failure. "(nil? (get-remaining))" nil (get-remaining) (.x ~last-failure))))
+     (check (nil? (get-remaining)) ~pattern)
      output#))
 
 (defmacro clear-remaining [body]
@@ -88,8 +87,8 @@
   (or (nil? input) (instance? clojure.lang.Seqable input)))
 
 (defn view-first [pattern info]
-  `(do (check (not (nil? ~input)))
-     (let-input (first ~input) (check-remaining ~(view pattern info)))))
+  `(do (check (not (nil? ~input)) ~pattern)
+     (let-input (first ~input) (check-remaining ~pattern ~(view pattern info)))))
 
 (defn let-bound [bound code]
   `(let [~@(aconcat
@@ -123,18 +122,18 @@
  (fn view [this info]
    [nil Object]
    `(let [literal# '~this]
-      (check (= literal# ~input))
+      (check (= literal# ~input) ~this)
       literal#)
 
    [ISeq IPersistentVector]
-   `(do (check (seqable? ~input))
+   `(do (check (seqable? ~input) ~this)
       (let-input (seq ~input) ~(seq->view (seq this) info)))
 
    [IPersistentMap]
-   `(do (check (map? ~input))
+   `(do (check (map? ~input) ~this)
       ~(for-map [[key pattern] this]
                 key
-                `(let-input (get ~input ~key) (check-remaining ~(view pattern info)))))))
+                `(let-input (get ~input ~key) (check-remaining ~pattern ~(view pattern info)))))))
 
 ;; LOGICAL PATTERNS
 
@@ -146,12 +145,12 @@
    input
 
    [Is]
-   `(do (check (~f ~input))
+   `(do (check (~f ~input) ~this)
       ~input)
 
    [Guard]
    `(let [output# ~(view pattern info)]
-      (check ~(let-bound (:bound-here (meta this)) code))
+      (check ~(let-bound (:bound-here (meta this)) code) ~this)
       output#)
 
    [Name]
@@ -173,7 +172,7 @@
 
    [WithMeta]
    `(try-with-meta ~(view pattern info)
-                   (let-input (meta ~input) (check-remaining ~(view meta-pattern info))))
+                   (let-input (meta ~input) (check-remaining ~meta-pattern ~(view meta-pattern info))))
 
    [Refer]
    `(~(name->view name) ~input ~remaining)
@@ -193,17 +192,17 @@
    (view pattern (assoc info :remaining? true))
 
    [Repeated]
-   `(do (check (seqable? ~input))
+   `(do (check (seqable? ~input) ~this)
         (loop [~input (seq ~input)
                loop-output# []
                loop-count# 0]
-          (let [result# (on-fail (do (check (< loop-count# ~max-count))
+          (let [result# (on-fail (do (check (< loop-count# ~max-count) this)
                                    ~(if (rest? pattern)
                                       (view pattern info)
                                       (view-first pattern info)))
                                  failure)]
             (if (identical? failure result#)
-              (do (check (>= loop-count# ~min-count))
+              (do (check (>= loop-count# ~min-count) ~this)
                 (set-remaining ~input)
                 (seq loop-output#))
               (recur
@@ -212,4 +211,4 @@
                (unchecked-inc loop-count#))))))
 
    [Total]
-   `(check-remaining ~(view pattern info))))
+   `(check-remaining ~pattern ~(view pattern info))))

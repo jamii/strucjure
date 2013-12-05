@@ -1,6 +1,6 @@
 (ns strucjure.pattern
   (:require [clojure.set :refer [union difference]]
-            [plumbing.core :refer [for-map aconcat map-vals fnk]]
+            [plumbing.core :refer [for-map aconcat map-vals]]
             [strucjure.util :refer [extend-protocol-by-fn try-vary-meta try-with-meta]])
   (:import [clojure.lang ISeq IPersistentVector IPersistentMap]))
 

@@ -214,12 +214,13 @@
         (loop [~input (seq ~input)
                loop-output# ~(if output? [] nil)
                loop-count# 0]
-          (let [result# (on-fail (do (check (< loop-count# ~max-count) this)
-                                   ~(if (rest? pattern)
-                                      (view pattern info)
-                                      (view-first pattern info)))
-                                 failure)]
-            (if (identical? failure result#)
+          (let [result# (try
+                          (do (check (< loop-count# ~max-count) this)
+                            ~(if (rest? pattern)
+                               (view pattern info)
+                               (view-first pattern info)))
+                          (catch Failure failure# failure#))]
+            (if (instance? Failure result#)
               (do (check (>= loop-count# ~min-count) ~this)
                 (pass-remaining ~remaining? ~input ~this)
                 (seq loop-output#))

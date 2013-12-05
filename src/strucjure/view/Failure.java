@@ -6,15 +6,27 @@ import clojure.lang.Var;
 public class Failure extends Exception {
   public static Var prstr = RT.var("clojure.core", "pr-str");
   public String test;
+  public String pattern;
   public Object input;
+  public Failure lastFailure;
 
-  public Failure(String test, Object input) {
+  public Failure(String test, String pattern, Object input, Failure lastFailure) {
     super();
     this.test = test;
+    this.pattern = pattern;
     this.input = input;
+    this.lastFailure = lastFailure;
   }
 
   public String getMessage() {
-    return "Failed test " + test + " on input " + prstr.invoke(input);
+    StringBuilder builder = new StringBuilder();
+    this.getMessage(builder);
+    return builder.toString();
+  }
+
+  public void getMessage(StringBuilder builder) {
+    builder.append("Failed test " + test + " in pattern " + pattern + " on input " + prstr.invoke(input) + "\n");
+    if (lastFailure != null)
+      lastFailure.getMessage(builder);
   }
 }

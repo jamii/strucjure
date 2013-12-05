@@ -24,12 +24,13 @@
 
 ;; FAILURE
 
-(def failure
-  (Failure. "<internal>" nil))
+(def last-failure
+  (gensym "last-failure"))
 
 (defmacro on-fail [t f]
   `(try ~t
         (catch Failure exc#
+          (.set ~last-failure exc#)
           ~f)))
 
 (defmacro trap-failure [body]
@@ -39,8 +40,9 @@
             (throw (Exception. (str exc#)))
             (throw exc#)))))
 
-(defmacro check [pred]
-  `(if-not ~pred (throw failure)))
+(defmacro check [pred] ;; TODO pattern in here
+  `(when-not ~pred
+     (throw (Failure. ~(pr-str pred) ~(pr-str "<pattern>") ~input (.x ~last-failure)))))
 
 ;; REMAINING
 
@@ -55,7 +57,8 @@
 
 (defmacro check-remaining [body]
   `(let [output# ~body]
-     (check (nil? (get-remaining)))
+     (when-not (nil? (get-remaining))
+       (throw (Failure. "(nil? (get-remaining))" nil (get-remaining) (.x ~last-failure))))
      output#))
 
 (defmacro clear-remaining [body]

@@ -8,6 +8,9 @@
 
 ;; (test-ns 'strucjure.test)
 
+(defrecord Foo [x y])
+(defrecord Bar [x y])
+
 (deftest basics
   ;; equality
   (is (= (match 1
@@ -68,6 +71,23 @@
                 {:a 1 :c _} :huh?)
          :huh? ;; just matches on (:c input) and _ matches nil, so missing keys are allowed
          ))
+
+  ;; records
+
+  (is (= (match (Foo. 1 2)
+                (Bar. 1 2) :fail
+                (Foo. :a :b) :fail
+                (Foo. 1 2) :ok)))
+
+  (is (= (match (Foo. 1 2)
+                (->Foo 1 2) :ok)))
+
+  ;; TODO something is calling clojure.walk/walk on this record literal :(
+  ;;  (is (= (match (Foo. 1 2)
+  ;;                #strucjure.test.Foo{:x 1 :y 2} :ok)))
+
+  (is (= (match (Foo. 1 2)
+                {:x 1 :y 2} :ok)))
 
   ;; metadata
 
@@ -217,7 +237,7 @@
 
   =>
 
-  (clojure.core/let [input25733 {:a 1, :b 2}] (clojure.core/let [last-failure25739 (proteus.Containers$O. nil) remaining25757 (proteus.Containers$O. nil)] (clojure.core/let [a (proteus.Containers$O. nil) b (proteus.Containers$O. nil)] (do (do (strucjure.view/check (clojure.core/map? input25733) {:b #strucjure.pattern.Name{:name b, :pattern #strucjure.pattern.Any{}}, :a #strucjure.pattern.Name{:name a, :pattern #strucjure.pattern.Any{}}}) (do (strucjure.view/let-input (clojure.core/get input25733 :b) (clojure.core/let [output__25854__auto__ input25733] (.set b output__25854__auto__) output__25854__auto__)) (strucjure.view/let-input (clojure.core/get input25733 :a) (clojure.core/let [output__25854__auto__ input25733] (.set a output__25854__auto__) output__25854__auto__)))) (strucjure.view/trap-failure (clojure.core/let [a (.x a) b (.x b)] [a b]))))))
+  (clojure.core/let [input6214 {:a 1, :b 2}] (clojure.core/let [last-failure6220 (proteus.Containers$O. nil) remaining6238 (proteus.Containers$O. nil)] (clojure.core/let [a (proteus.Containers$O. nil) b (proteus.Containers$O. nil)] (do (do (strucjure.view/check (clojure.core/map? input6214) {:a #strucjure.pattern.Name{:name a, :pattern #strucjure.pattern.Any{}}, :b #strucjure.pattern.Name{:name b, :pattern #strucjure.pattern.Any{}}}) (do {:a #strucjure.pattern.Name{:name a, :pattern #strucjure.pattern.Any{}}, :b #strucjure.pattern.Name{:name b, :pattern #strucjure.pattern.Any{}}} :a (strucjure.view/let-input (clojure.core/get input6214 :a) (clojure.core/let [output__6350__auto__ input6214] (.set a output__6350__auto__) output__6350__auto__)) :b (strucjure.view/let-input (clojure.core/get input6214 :b) (clojure.core/let [output__6350__auto__ input6214] (.set b output__6350__auto__) output__6350__auto__)))) (strucjure.view/trap-failure (clojure.core/let [a (.x a) b (.x b)] [a b]))))))
 
   ;; open language
 

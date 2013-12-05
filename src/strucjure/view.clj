@@ -4,7 +4,7 @@
             [strucjure.util :refer [extend-protocol-by-fn try-with-meta]]
             [strucjure.pattern :as pattern]
             [proteus :refer [let-mutable]])
-  (:import [clojure.lang ISeq IPersistentVector IPersistentMap]
+  (:import [clojure.lang ISeq IPersistentVector IPersistentMap IRecord]
            [strucjure.pattern Any Is Rest Guard Name Repeated WithMeta Or And Refer Let Output Trace]
            [strucjure.view Failure]))
 
@@ -128,6 +128,13 @@
                 (clear-remaining remaining? ~(or->view next-pattern info)))
       (view first-pattern info))))
 
+(defn map->view [this {:keys [output?] :as info}]
+  `(do (check (map? ~input) ~this)
+     (~(if output? 'assoc 'do)
+       ~this
+       ~@(aconcat (for [[key pattern] this]
+                    [key `(let-input (get ~input ~key) ~(view pattern (assoc info :remaining? false)))])))))
+
 (extend-protocol-by-fn
  View
  (fn view [this {:keys [output?] :as info}]
@@ -141,11 +148,11 @@
       (let-input (seq ~input) ~(seq->view (seq this) info)))
 
    [IPersistentMap]
-   `(do (check (map? ~input) ~this)
-      ~(let [map (for-map [[key pattern] this]
-                          key
-                          `(let-input (get ~input ~key) ~(view pattern (assoc info :remaining? false))))]
-         (if output? map `(do ~@(vals map)))))))
+   (map->view this info)
+
+   [IRecord]
+   `(do (check (instance? ~(class this) ~input))
+      ~(map->view this info))))
 
 ;; LOGICAL PATTERNS
 

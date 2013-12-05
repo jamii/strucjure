@@ -2,7 +2,7 @@
   (:require [clojure.set :refer [union difference]]
             [plumbing.core :refer [for-map aconcat map-vals]]
             [strucjure.util :refer [extend-protocol-by-fn try-vary-meta try-with-meta]])
-  (:import [clojure.lang ISeq IPersistentVector IPersistentMap]))
+  (:import [clojure.lang ISeq IPersistentVector IPersistentMap IRecord]))
 
 ;; TODO Records
 
@@ -39,7 +39,7 @@
  (fn subpatterns [this]
    [nil Object Any Is Refer] nil
    [ISeq IPersistentVector] this
-   [IPersistentMap] (vals this)
+   [IPersistentMap IRecord] (vals this)
    [Rest Guard Name Repeated Output Let Trace] [(:pattern this)]
    [WithMeta] [(:pattern this) (:meta-pattern this)]
    [Or And] (:patterns this))
@@ -48,13 +48,13 @@
    [nil Object Any Is Refer] this
    [ISeq] (apply list subpatterns)
    [IPersistentVector] (vec subpatterns)
-   [IPersistentMap] (zipmap (keys this) subpatterns)
+   [IPersistentMap IRecord] (reduce (fn [this [key value]] (assoc this key value)) this (map vector (keys this) subpatterns))
    [Rest Guard Name Repeated Output Let Trace] (assoc this :pattern (first subpatterns))
    [WithMeta] (assoc this :pattern (first subpatterns) :meta-pattern (second subpatterns))
    [Or And] (assoc this :patterns subpatterns))
 
  (fn bound [this]
-   [nil Object ISeq IPersistentVector IPersistentMap Any Is Rest Guard Repeated WithMeta Or And Refer Let Output Trace] #{}
+   [nil Object ISeq IPersistentVector IPersistentMap IRecord Any Is Rest Guard Repeated WithMeta Or And Refer Let Output Trace] #{}
    [Name] #{(:name this)}))
 
 (defn with-bound [pattern]

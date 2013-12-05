@@ -73,8 +73,15 @@
                        (->Trace (str name) (trace-let pattern))))
     (pattern/walk pattern trace-let)))
 
-(defmacro trace [input & patterns&outputs]
-  (let [pattern (trace-let (eval `(case ~@patterns&outputs)))]
+(defn trace-all [pattern]
+  (->Trace (pr-str pattern)
+           (if (instance? Let pattern)
+             (assoc (pattern/walk pattern trace-all)
+               :refers (for-map [[name pattern] (:refers pattern)] name (trace-all pattern)))
+             (pattern/walk pattern trace-all))))
+
+(defmacro match-with [tracer input & patterns&outputs]
+  (let [pattern (eval `(~tracer (case ~@patterns&outputs)))]
     `(let [~view/input ~input
            ~view/depth (proteus.Containers$O. 0)]
        ~(view/view-top pattern))))

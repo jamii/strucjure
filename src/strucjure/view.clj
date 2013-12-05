@@ -120,8 +120,8 @@
 
 (defn or->view [patterns {:keys [remaining?] :as info}]
   (assert (not (empty? patterns)) "OR patterns must not be empty")
-  (let [bindings (for [pattern patterns] (let [[_ bound] (pattern/with-bound pattern)] bound))]
-    (assert (every? #(= (first bindings) %) bindings) "All branches of an Or pattern must have the same bound variables"))
+  ;;(let [bindings (for [pattern patterns] (let [[_ bound] (pattern/with-bound pattern)] bound))]
+  ;;  (assert (every? #(= (first bindings) %) bindings) "All branches of an Or pattern must have the same bound variables"))
   (let [[first-pattern & next-pattern] patterns]
     (if next-pattern
       `(on-fail ~(view first-pattern info)

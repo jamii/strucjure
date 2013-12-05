@@ -25,7 +25,7 @@
 ;; FAILURE
 
 (def failure
-  (Failure. "Internal failure" nil))
+  (Failure. "<internal>" nil))
 
 (defmacro on-fail [t f]
   `(try ~t

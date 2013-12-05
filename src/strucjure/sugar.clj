@@ -66,7 +66,10 @@
 (comment
   (set! *warn-on-reflection* true)
 
-  (= [1 2 3] [1 2 3])
+  (= (list 1 2 3) (list 1 2 3))
+
+  (match (list 1 2 3)
+         (list 1 2 3))
 
   (match 1 ^x _ x)
 
@@ -120,4 +123,5 @@
   (match [1 2 3]
          (letp [i (is integer?)]
                (* i)))
+
   )

@@ -2,15 +2,40 @@
 
 In idiomatic clojure data is not hidden behind classes and methods, but instead left lying around in a homogenous heap of stuff. Assumptions about the shape of stuff are implicitly encoded in the functions used to operate on it. When your stuff is the wrong shape things blow up far down the line in an unhelpful fashion.
 
-```
-(ns example
-  (:require [foo :refer-all]))
-;; java.lang.IllegalArgumentException: No value supplied for key: true
-;; PersistentHashMap.java:77 clojure.lang.PersistentHashMap.create
-;; Yep, thanks for that.
+``` clojure
+(defn f [{:keys [x y] :as z}]
+      [x y z])
+
+(f {:x 1 :y 2})
+;; [1 2 {:x 1 :y 2}]
+
+(f nil)
+;; [nil nil nil]
+
+(f (list 1 2 3 4))
+;; [nil nil {1 2 3 4}]
 ```
 
 Strucjure is a library for describing stuff in an executable manner. It gives you pattern matching (with first-class patterns), validators, parsers, walks and lenses (and eventually generators). The shape of your data is immediately apparent from your code and errors are clearly reported.
+
+``` clojure
+(require '[strucjure.sugar :as s :refer [_]])
+
+(defn g [input]
+  (s/match input
+         ^z (s/keys x y) [x y z]))
+
+(g {:x 1 :y 2})
+;; [1 2 {:x 1 :y 2}]
+
+(g nil)
+;; strucjure.view.Failure:
+;; Failed test (clojure.core/map? input6214) in pattern {:x #strucjure.pattern.Name{:name x, :pattern #strucjure.pattern.Any{}}, :y #strucjure.pattern.Name{:name y, :pattern #strucjure.pattern.Any{}}} on input nil
+
+(g (list 1 2 3 4))
+;; strucjure.view.Failure:
+;; Failed test (clojure.core/map? input6214) in pattern {:x #strucjure.pattern.Name{:name x, :pattern #strucjure.pattern.Any{}}, :y #strucjure.pattern.Name{:name y, :pattern #strucjure.pattern.Any{}}} on input (1 2 3 4)
+```
 
 ## Concision
 
@@ -70,8 +95,6 @@ private void adjustAfterInsertion(Node n) {
 ...to the declarative approach.
 
 ``` clojure
-(require '[strucjure.sugar :as s :refer [_]])
-
 (defrecord Red [value left right])
 (defrecord Black [value left right])
 
@@ -134,41 +157,6 @@ Even the recursive patterns used in parsing are first-class data structures whic
 ```
 
 ## Error reporting
-
-Clojure destructuring can be a little too helpful at times.
-
-``` clojure
-(defn f [{:keys [x y] :as z}]
-      [x y z])
-
-(f {:x 1 :y 2})
-;; [1 2 {:x 1 :y 2}]
-
-(f nil)
-;; [nil nil nil]
-
-(f (list 1 2 3 4))
-;; [nil nil {1 2 3 4}]
-```
-
-Strucjure sanity-checks its input so you don't have to.
-
-``` clojure
-(defn g [input]
-  (s/match input
-         ^z (s/keys x y) [x y z]))
-
-(g {:x 1 :y 2})
-;; [1 2 {:x 1 :y 2}]
-
-(g nil)
-;; strucjure.view.Failure:
-;; Failed test (clojure.core/map? input6214) in pattern {:x #strucjure.pattern.Name{:name x, :pattern #strucjure.pattern.Any{}}, :y #strucjure.pattern.Name{:name y, :pattern #strucjure.pattern.Any{}}} on input nil
-
-(g (list 1 2 3 4))
-;; strucjure.view.Failure:
-;; Failed test (clojure.core/map? input6214) in pattern {:x #strucjure.pattern.Name{:name x, :pattern #strucjure.pattern.Any{}}, :y #strucjure.pattern.Name{:name y, :pattern #strucjure.pattern.Any{}}} on input (1 2 3 4)
-```
 
 The errors produced by failing matches contain a list of every point at which the match backtracked (in reverse order).
 

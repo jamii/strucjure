@@ -37,6 +37,8 @@ Strucjure is a library for describing stuff in an executable manner. It gives yo
 ;; Failed test (clojure.core/map? input6214) in pattern {:x #strucjure.pattern.Name{:name x, :pattern #strucjure.pattern.Any{}}, :y #strucjure.pattern.Name{:name y, :pattern #strucjure.pattern.Any{}}} on input (1 2 3 4)
 ```
 
+And the whole library is well under 500 loc.
+
 ## Concision
 
 Pattern matching tends to be far more concise than imperative style chains of boolean tests which we still use in clojure every day.
@@ -119,6 +121,8 @@ Patterns in strucjure are first-class. The pattern part of the match statement i
 (match {:a 1 :b 2}
        {:a ^a _ :b ^b _} [a b])
 
+;; too verbose, let's fix it
+
 (defn my-keys* [symbols]
   (for-map [symbol symbols]
            (keyword (str symbol))
@@ -180,7 +184,7 @@ The errors produced by failing matches contain a list of every point at which th
 ;; Failed test (clojure.core/= literal__6312__auto__ input6214) in pattern succ on input add
 ```
 
-If that isn't enough to locate the failure, you can also run the match with tracing enabled:
+If that isn't enough to locate the failure you can also run the match with tracing enabled:
 
 ``` clojure
 (with-out-str
@@ -296,7 +300,7 @@ The aim for the 1.0 release is for every match to execute at least as fast as th
 ;; 159 ns
 ```
 
-Binding variables in a match is currently expensive relative to normal clojure destructuring (due to using proteus.Container to fake mutable variables).
+Binding variables in a match is currently expensive relative to normal clojure destructuring (due to using `proteus.Container$0` to fake mutable variables).
 
 ``` clojure
 (let [{:keys [a b]} {:a 1 :b 2}]
@@ -336,6 +340,12 @@ Other performance disparities are less clear.
 (h (range 10))
 ;; 9.7 µs
 ```
+
+Nethertheless, there is no reason why pattern matching shouldn't eventually be faster, especially since they allow complex parsing with only a single pass over the input data.
+
+## More
+
+See the [tests](https://github.com/jamii/strucjure/blob/master/test/strucjure/test.clj) for detailed examples of the various patterns available.
 
 ## License
 

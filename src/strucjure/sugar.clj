@@ -26,6 +26,8 @@
 (defn +& [pattern] (+ (& pattern)))
 (defn ?& [pattern] (? (& pattern)))
 
+(def not-nil (is #(not (nil? %))))
+
 (defmacro output [pattern code] `(->Output ~pattern '~code))
 
 (defn- with-names [form]

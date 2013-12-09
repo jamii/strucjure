@@ -65,12 +65,18 @@
                 {:a 2} :wrong
                 {:a 1} :no-b
                 {:a 1 :b 2} :exact)
-         :no-b ;; missing keys are allowed
+         :no-b ;; map patterns ignore extra keys
          ))
 
   (t/is (= (match {:a 1 :b 2}
-                {:a 1 :c _} :huh?)
-         :huh? ;; just matches on (:c input) and _ matches nil, so missing keys are allowed
+                  {:a 1 :c _} :huh?)
+         :huh? ;; missing keys return nil which matches _. this is a deliberate choice to match destructuring semantics
+         ))
+
+  (t/is (= (match {:a 1 :b 2}
+                  {:a 1 :c not-nil} :fail
+                  _ :ok)
+         :ok
          ))
 
   ;; records

@@ -1,6 +1,7 @@
 (ns strucjure.examples
-  (:refer-clojure :exclude [case with-meta * + or and])
-  (require [strucjure.pattern :refer :all]
+  (:refer-clojure :exclude [with-meta * + or and name case])
+  (require [plumbing.core :refer [for-map aconcat map-vals]]
+           [strucjure.pattern :refer :all]
            [strucjure.view :as view]
            [strucjure.sugar :refer :all]))
 
@@ -27,6 +28,22 @@
          ^other _
          other))
 
+;; EASY EXTENSION
+
+(match {:a 1 :b 2}
+       {:a ^a _ :b ^b _} [a b])
+
+(defn keys* [& symbols]
+  (for-map [symbol symbols]
+           (keyword (str symbol))
+           (->Name symbol (->Any))))
+
+(defmacro keys [& symbols]
+  `(keys* ~@(for [symbol symbols] `'~symbol)))
+
+(match {:a 1 :b 2}
+       (keys a b) [a b])
+
 ;; FAIL EARLY
 ;; compare...
 
@@ -48,22 +65,6 @@
 (g nil)
 
 (g (list 1 2 3 4))
-
-;; EASY EXTENSION
-
-(match {:a 1 :b 2}
-       {:a ^a _ :b ^b _} [a b])
-
-(defn keys* [& symbols]
-  (for-map [symbol symbols]
-           (keyword (name symbol))
-           (->Name symbol (->Any))))
-
-(defmacro keys [& symbols]
-  `(keys* ~@(for [symbol symbols] `'~symbol)))
-
-(match {:a 1 :b 2}
-       (keys a b) [a b])
 
 ;; FIRST-CLASS SCOPES
 
@@ -120,7 +121,7 @@
        {:a 1 :b 2} :ok)
 ;; 156 ns
 
-(let [input {:keys [a b]}]
+(let [{:keys [a b]} {:a 1 :b 2}]
   (and (= a 1) (= b 2)))
 ;; 110 ns
 
@@ -130,4 +131,4 @@
 
 (match {:a 1 :b 2}
        (keys a b) [a b])
-;; 657 ns
+;; 657 ns - needs real mutable vars :(

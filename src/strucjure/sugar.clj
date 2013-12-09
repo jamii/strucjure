@@ -36,18 +36,8 @@
        form))
    form))
 
-(def overrides #{'_ 'is 'guard 'name '* '+ '? 'with-meta 'or 'and 'seqable '& '&* '&+ '&? '&*& '&+& '&?& '*& '+& '?&})
-
-(defn- with-overrides [form]
-  (clojure.walk/prewalk
-   (fn [form]
-     (if (contains? overrides form)
-       (symbol (str "strucjure.sugar/" form))
-       form))
-   form))
-
 (defmacro pattern [sugar]
-  (with-overrides (with-names sugar)))
+  (with-names sugar))
 
 (defmacro case [& patterns&outputs]
   (cond

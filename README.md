@@ -74,6 +74,8 @@ private void adjustAfterInsertion(Node n) {
 ...to the declarative approach.
 
 ``` clojure
+(require '[strucjure.sugar :as s :refer [_]])
+
 (defrecord Red [value left right])
 (defrecord Black [value left right])
 
@@ -156,8 +158,6 @@ Clojure destructuring can be a little too helpful at times.
 Strucjure sanity-checks its input so you don't have to.
 
 ``` clojure
-(require '[strucjure.sugar :as s :refer [_]])
-
 (defn g [input]
   (s/match input
          ^z (s/keys x y) [x y z]))

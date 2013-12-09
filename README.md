@@ -2,111 +2,348 @@
 
 In idiomatic clojure data is not hidden behind classes and methods, but instead left lying around in a homogenous heap of stuff. Assumptions about the shape of stuff are implicitly encoded in the functions used to operate on it. When your stuff is the wrong shape things blow up far down the line in an unhelpful fashion.
 
-``` clojure
-user> (doc ns)
--------------------------
-clojure.core/ns
-([name docstring? attr-map? references*])
-...
-user> (ns foo
-        (:require [bar :refer-all]))
-IllegalArgumentException No value supplied for key: true  clojure.lang.PersistentHashMap.create (PersistentHashMap.java:77)
+```
+(ns example
+  (:require [foo :refer-all]))
+;; java.lang.IllegalArgumentException: No value supplied for key: true
+;; PersistentHashMap.java:77 clojure.lang.PersistentHashMap.create
+;; Yep, thanks for that.
 ```
 
-Strucjure is a library for describing stuff in an executable manner. You provide a declarative grammar for your stuff and strucjure gives you pattern matching, validators, parsers, walks and lenses (and eventually generators). The shape of your data is immediately apparent from your code and errors are clearly reported.
+Strucjure is a library for describing stuff in an executable manner. It gives you pattern matching (with first-class patterns), validators, parsers, walks and lenses (and eventually generators). The shape of your data is immediately apparent from your code and errors are clearly reported.
 
-``` clojure
-user> (require '[strucjure.sugar :as s] '[strucjure.view :as v])
-nil
+## Concision
 
-user> (def ns-grammar
-  (s/graph
-   ns (list 'ns ^name symbol (&? docstring) (&? attr-map) (&* reference))
-   docstring (is string?)
-   attr-map (is map?)
-   reference (or require import)
-   require (list :require (&* libspec))
-   libspec (or symbol
-               [^prefix symbol (&* libspec)]
-               [symbol (&*& option)])
-   option (or (list :as symbol)
-              (list :refer (or :all [(&* symbol)]))
-              (list :reload)
-              (list :reload-all)
-              (list :verbose))
-   import (list :import (&* [symbol & * symbol]))
-   symbol (is symbol?)))
-#'user/ns-grammar
+Pattern matching tends to be far more concise than imperative style chains of boolean tests.
 
-user> (def ns-validate
-  (v/with-layers [v/with-depth v/with-deepest-failure]
-    (v/*view* (s/node-of 'ns ns-grammar))))
-#'user/ns-validate
+``` java
+private void adjustAfterInsertion(Node n) {
+        // Step 1: color the node red
+        setColor(n, Color.red);
 
-user> (ns-validate '(ns foo (:require [bar :refer :all])))
-(ns foo (:require [bar :refer :all]))
+        // Step 2: Correct double red problems, if they exist
+        if (n != null && n != root && isRed(parentOf(n))) {
 
-user> (ns-validate '(ns foo (:require [bar :refer-all])))
-Failure strucjure.view.Failure: (trap-failure (#<core$symbol_QMARK_ clojure.core$symbol_QMARK_@7078cdad> :refer-all)) at node `symbol` on input `:refer-all`  strucjure.view/with-deepest-failure/fn--42754 (view.clj:372)
+            // Step 2a (simplest): Recolor, and move up to see if more work
+            // needed
+            if (isRed(siblingOf(parentOf(n)))) {
+                setColor(parentOf(n), Color.black);
+                setColor(siblingOf(parentOf(n)), Color.black);
+                setColor(grandparentOf(n), Color.red);
+                adjustAfterInsertion(grandparentOf(n));
+            }
 
-user> (def ns-validate-verbose
-  (v/with-layers [v/with-node-depth v/trace-nodes]
-    (v/*view* (s/node-of 'ns ns-grammar))))
-#'user/ns-validate-verbose
+            // Step 2b: Restructure for a parent who is the left child of the
+            // grandparent. This will require a single right rotation if n is
+            // also
+            // a left child, or a left-right rotation otherwise.
+            else if (parentOf(n) == leftOf(grandparentOf(n))) {
+                if (n == rightOf(parentOf(n))) {
+                    rotateLeft(n = parentOf(n));
+                }
+                setColor(parentOf(n), Color.black);
+                setColor(grandparentOf(n), Color.red);
+                rotateRight(grandparentOf(n));
+            }
 
-user> (ns-validate-verbose '(ns foo (:require [bar :refer-all])))
- => ns (ns foo (:require [bar :refer-all]))
-     => symbol foo
-     <= symbol foo nil
-     => docstring (:require [bar :refer-all])
-     X docstring strucjure.view.Failure: (trap-failure (#<core$string_QMARK_ clojure.core$string_QMARK_@5d850909> (:require [bar :refer-all])))
-     => attr-map (:require [bar :refer-all])
-     X attr-map strucjure.view.Failure: (trap-failure (#<core$map_QMARK_ clojure.core$map_QMARK_@581cb215> (:require [bar :refer-all])))
-     => reference (:require [bar :refer-all])
-         => require (:require [bar :refer-all])
-             => libspec [bar :refer-all]
-                 => symbol [bar :refer-all]
-                 X symbol strucjure.view.Failure: (trap-failure (#<core$symbol_QMARK_ clojure.core$symbol_QMARK_@7078cdad> [bar :refer-all]))
-                 => symbol bar
-                 <= symbol bar nil
-                 => libspec :refer-all
-                     => symbol :refer-all
-                     X symbol strucjure.view.Failure: (trap-failure (#<core$symbol_QMARK_ clojure.core$symbol_QMARK_@7078cdad> :refer-all))
-                 X libspec strucjure.view.Failure: (vector? :refer-all)
-                 => symbol bar
-                 <= symbol bar nil
-                 => option (:refer-all)
-                 X option strucjure.view.Failure: (= :verbose :refer-all)
-             X libspec strucjure.view.Failure: (clojure.core/nil? (:refer-all))
-         X require strucjure.view.Failure: (clojure.core/nil? ([bar :refer-all]))
-         => import (:require [bar :refer-all])
-         X import strucjure.view.Failure: (= :import :require)
-     X reference strucjure.view.Failure: (= :import :require)
- X ns strucjure.view.Failure: (clojure.core/nil? ((:require [bar :refer-all])))
-Failure strucjure.view.Failure: (trap-failure (#<core$symbol_QMARK_ clojure.core$symbol_QMARK_@7078cdad> :refer-all)) at node `symbol` on input `:refer-all`  strucjure.view/with-deepest-failure/fn--42754 (view.clj:372)
+            // Step 2c: Restructure for a parent who is the right child of the
+            // grandparent. This will require a single left rotation if n is
+            // also
+            // a right child, or a right-left rotation otherwise.
+            else if (parentOf(n) == rightOf(grandparentOf(n))) {
+                if (n == leftOf(parentOf(n))) {
+                    rotateRight(n = parentOf(n));
+                }
+                setColor(parentOf(n), Color.black);
+                setColor(grandparentOf(n), Color.red);
+                rotateLeft(grandparentOf(n));
+            }
+        }
+
+        // Step 3: Color the root black
+        setColor((Node) root, Color.black);
+    }
 ```
 
-## Note
-
-The last stable version of strucjure is [v0.3.5](https://github.com/jamii/strucjure/releases/tag/v0.3.5). This readme refers to the version currently in development. Here be dragons...
-
-## Quickstart
-
 ``` clojure
-[strucjure "0.4.0-SNAPSHOT"]
+(defrecord Red [value left right])
+(defrecord Black [value left right])
+
+(defn balance [tree]
+  (s/match tree
+         (s/or
+          (Black. ^z _ (Red. ^y _ (Red. ^x _ ^a _ ^b _) ^c _) ^d _)
+          (Black. ^z _ (Red. ^x _ ^a _ (Red. ^y _ ^b _ ^c _)) ^d _)
+          (Black. ^x _ ^a _ (Red. ^z _ (Red. ^y _ ^b _ ^c _) ^d _))
+          (Black. ^x _ ^a _ (Red. ^y _ ^b _ (Red. ^z _ ^c _ ^d _))))
+         (Red. y (Black. x a b) (Black. z c d))
+
+         ^other _
+         other))
 ```
 
-...
+## First-class patterns
 
-## Patterns
+Patterns in strucjure are first-class. The pattern part of the match statement is not a special langauge but just clojure code that is evaluated at compile-time and returns an instance of the `Pattern` and `View` protocols. This means you can easily extend the pattern language.
 
-## Graphs
+``` clojure
+(match {:a 1 :b 2}
+       {:a ^a _ :b ^b _} [a b])
 
-## Sugar
+(defn my-keys* [symbols]
+  (for-map [symbol symbols]
+           (keyword (str symbol))
+           (s/name symbol _)))
 
-## Views
+(defmacro my-keys [& symbols]
+  `(my-keys* '~symbols)))
 
-## Generators
+(s/match {:a 1 :b 2}
+       (my-keys a b) [a b])
+```
+
+Even the recursive patterns used in parsing are first-class data structures which can be modified and composed.
+
+``` clojure
+(def expr
+  (s/letp [num (s/or succ zero)
+           succ (s/case ['succ num] (inc num))
+           zero (s/case 'zero 0)
+           expr (s/or num add)
+           add (s/case ['add ^a expr ^b expr] (+ a b))]
+          expr))
+
+(match '(add (succ zero) (succ zero))
+       ^result expr result)
+;; 2
+
+(def expr-with-sub
+  (-> expr
+      (update-in [:refers 'expr] #(s/or % (->Refer 'sub)))
+      (assoc-in [:refers 'sub] (s/case ['sub ^a expr ^b expr] (- a b)))))
+
+(s/match '(sub (add (succ zero) (succ zero)) (succ zero))
+       ^result expr-with-sub result)
+;; 1
+```
+
+## Error reporting
+
+Clojure destructuring can be a little too helpful at times.
+
+``` clojure
+(defn f [{:keys [x y] :as z}]
+      [x y z])
+
+(f {:x 1 :y 2})
+;; [1 2 {:x 1 :y 2}]
+
+(f nil)
+;; [nil nil nil]
+
+(f (list 1 2 3 4))
+;; [nil nil {1 2 3 4}]
+```
+
+Strucjure sanity-checks its input so you don't have to.
+
+``` clojure
+(require '[strucjure.sugar :as s :refer [_]])
+
+(defn g [input]
+  (s/match input
+         ^z (s/keys x y) [x y z]))
+
+(g {:x 1 :y 2})
+;; [1 2 {:x 1 :y 2}]
+
+(g nil)
+;; strucjure.view.Failure:
+;; Failed test (clojure.core/map? input6214) in pattern {:x #strucjure.pattern.Name{:name x, :pattern #strucjure.pattern.Any{}}, :y #strucjure.pattern.Name{:name y, :pattern #strucjure.pattern.Any{}}} on input nil
+
+(g (list 1 2 3 4))
+;; strucjure.view.Failure:
+;; Failed test (clojure.core/map? input6214) in pattern {:x #strucjure.pattern.Name{:name x, :pattern #strucjure.pattern.Any{}}, :y #strucjure.pattern.Name{:name y, :pattern #strucjure.pattern.Any{}}} on input (1 2 3 4)
+```
+
+The errors produced by failing matches contain a list of every point at which the match backtracked (in reverse order).
+
+``` clojure
+(s/match [1 2 3]
+         [1 2] :nope
+         [1 2 3 4] :nope
+         [1 :x] :oh-noes)
+;; strucjure.view.Failure:
+;; Failed test (clojure.core/= literal__6312__auto__ input6214) in pattern :x on input 2
+;; Failed test (clojure.core/not (clojure.core/nil? input6214)) in pattern 4 on input nil
+;; Failed test (clojure.core/nil? input6214) in pattern nil on input (3)
+
+(s/match '(add (sub (succ zero) (succ zero)) (succ zero))
+         ^result expr result)
+;; strucjure.view.Failure:
+;; Failed test (clojure.core/= literal__6312__auto__ input6214) in pattern add on input sub
+;; Failed test (clojure.core/= literal__6312__auto__ input6214) in pattern zero on input (sub (succ zero) (succ zero))
+;; Failed test (clojure.core/= literal__6312__auto__ input6214) in pattern succ on input sub
+;; Failed test (clojure.core/= literal__6312__auto__ input6214) in pattern zero on input (add (sub (succ zero) (succ zero)) (succ zero))
+;; Failed test (clojure.core/= literal__6312__auto__ input6214) in pattern succ on input add
+```
+
+If that isn't enough to locate the failure, you can also run the match with tracing enabled:
+
+``` clojure
+(with-out-str
+  (match-with trace-let '(add (add (succ zero) (succ zero)) (succ zero))
+              expr expr))
+;;  => expr (add (add (succ zero) (succ zero)) (succ zero))
+;;    => num (add (add (succ zero) (succ zero)) (succ zero))
+;;     => succ (add (add (succ zero) (succ zero)) (succ zero))
+;;     XX succ #<Failure strucjure.view.Failure:
+;; Failed test (clojure.core/= literal__6312__auto__ input6214) in pattern succ on input add>
+;;     => zero (add (add (succ zero) (succ zero)) (succ zero))
+;;     XX zero #<Failure strucjure.view.Failure:
+;; Failed test (clojure.core/= literal__6312__auto__ input6214) in pattern zero on input (add (add (succ zero) (succ zero)) (succ zero))
+;; Failed test (clojure.core/= literal__6312__auto__ input6214) in pattern succ on input add>
+;;    XX num #<Failure strucjure.view.Failure:
+;; Failed test (clojure.core/= literal__6312__auto__ input6214) in pattern zero on input (add (add (succ zero) (succ zero)) (succ zero))
+;; Failed test (clojure.core/= literal__6312__auto__ input6214) in pattern succ on input add>
+;;    => add (add (add (succ zero) (succ zero)) (succ zero))
+;;     => expr (add (succ zero) (succ zero))
+;;      => num (add (succ zero) (succ zero))
+;;       => succ (add (succ zero) (succ zero))
+;;       XX succ #<Failure strucjure.view.Failure:
+;; Failed test (clojure.core/= literal__6312__auto__ input6214) in pattern succ on input add
+;; Failed test (clojure.core/= literal__6312__auto__ input6214) in pattern zero on input (add (add (succ zero) (succ zero)) (succ zero))
+;; Failed test (clojure.core/= literal__6312__auto__ input6214) in pattern succ on input add>
+;;       => zero (add (succ zero) (succ zero))
+;;       XX zero #<Failure strucjure.view.Failure:
+;; Failed test (clojure.core/= literal__6312__auto__ input6214) in pattern zero on input (add (succ zero) (succ zero))
+;; Failed test (clojure.core/= literal__6312__auto__ input6214) in pattern succ on input add
+;; Failed test (clojure.core/= literal__6312__auto__ input6214) in pattern zero on input (add (add (succ zero) (succ zero)) (succ zero))
+;; Failed test (clojure.core/= literal__6312__auto__ input6214) in pattern succ on input add>
+;;      XX num #<Failure strucjure.view.Failure:
+;; Failed test (clojure.core/= literal__6312__auto__ input6214) in pattern zero on input (add (succ zero) (succ zero))
+;; Failed test (clojure.core/= literal__6312__auto__ input6214) in pattern succ on input add
+;; Failed test (clojure.core/= literal__6312__auto__ input6214) in pattern zero on input (add (add (succ zero) (succ zero)) (succ zero))
+;; Failed test (clojure.core/= literal__6312__auto__ input6214) in pattern succ on input add>
+;;      => add (add (succ zero) (succ zero))
+;;       => expr (succ zero)
+;;        => num (succ zero)
+;;         => succ (succ zero)
+;;          => num zero
+;;           => succ zero
+;;           XX succ #<Failure strucjure.view.Failure:
+;; Failed test (strucjure.view/seqable? input6214) in pattern [succ #strucjure.pattern.Name{:name num, :pattern #strucjure.pattern.Refer{:name num}}] on input zero
+;; Failed test (clojure.core/= literal__6312__auto__ input6214) in pattern zero on input (add (succ zero) (succ zero))
+;; Failed test (clojure.core/= literal__6312__auto__ input6214) in pattern succ on input add
+;; Failed test (clojure.core/= literal__6312__auto__ input6214) in pattern zero on input (add (add (succ zero) (succ zero)) (succ zero))
+;; Failed test (clojure.core/= literal__6312__auto__ input6214) in pattern succ on input add>
+;;           => zero zero
+;;           <= zero 0
+;;          <= num 0
+;;         <= succ 1
+;;        <= num 1
+;;       <= expr 1
+;;       => expr (succ zero)
+;;        => num (succ zero)
+;;         => succ (succ zero)
+;;          => num zero
+;;           => succ zero
+;;           XX succ #<Failure strucjure.view.Failure:
+;; Failed test (strucjure.view/seqable? input6214) in pattern [succ #strucjure.pattern.Name{:name num, :pattern #strucjure.pattern.Refer{:name num}}] on input zero
+;; Failed test (strucjure.view/seqable? input6214) in pattern [succ #strucjure.pattern.Name{:name num, :pattern #strucjure.pattern.Refer{:name num}}] on input zero
+;; Failed test (clojure.core/= literal__6312__auto__ input6214) in pattern zero on input (add (succ zero) (succ zero))
+;; Failed test (clojure.core/= literal__6312__auto__ input6214) in pattern succ on input add
+;; Failed test (clojure.core/= literal__6312__auto__ input6214) in pattern zero on input (add (add (succ zero) (succ zero)) (succ zero))
+;; Failed test (clojure.core/= literal__6312__auto__ input6214) in pattern succ on input add>
+;;           => zero zero
+;;           <= zero 0
+;;          <= num 0
+;;         <= succ 1
+;;        <= num 1
+;;       <= expr 1
+;;      <= add 2
+;;     <= expr 2
+;;     => expr (succ zero)
+;;      => num (succ zero)
+;;       => succ (succ zero)
+;;        => num zero
+;;         => succ zero
+;;         XX succ #<Failure strucjure.view.Failure:
+;; Failed test (strucjure.view/seqable? input6214) in pattern [succ #strucjure.pattern.Name{:name num, :pattern #strucjure.pattern.Refer{:name num}}] on input zero
+;; Failed test (strucjure.view/seqable? input6214) in pattern [succ #strucjure.pattern.Name{:name num, :pattern #strucjure.pattern.Refer{:name num}}] on input zero
+;; Failed test (strucjure.view/seqable? input6214) in pattern [succ #strucjure.pattern.Name{:name num, :pattern #strucjure.pattern.Refer{:name num}}] on input zero
+;; Failed test (clojure.core/= literal__6312__auto__ input6214) in pattern zero on input (add (succ zero) (succ zero))
+;; Failed test (clojure.core/= literal__6312__auto__ input6214) in pattern succ on input add
+;; Failed test (clojure.core/= literal__6312__auto__ input6214) in pattern zero on input (add (add (succ zero) (succ zero)) (succ zero))
+;; Failed test (clojure.core/= literal__6312__auto__ input6214) in pattern succ on input add>
+;;         => zero zero
+;;         <= zero 0
+;;        <= num 0
+;;       <= succ 1
+;;      <= num 1
+;;     <= expr 1
+;;    <= add 3
+;;   <= expr 3
+ ```
+
+## Performance
+
+The aim for the 1.0 release is for every match to execute at least as fast as the equivalent idiomatic clojure code.
+
+``` clojure
+(= {:a 1 :b 2}
+   {:a 1 :b 2})
+;; 173 ns
+
+(let [{:keys [a b]} {:a 1 :b 2}]
+  (and (= a 1) (= b 2)))
+;; 464 ns (really?)
+
+(match {:a 1 :b 2}
+       {:a 1 :b 2} :ok)
+;; 159 ns
+```
+
+Binding variables in a match is currently expensive relative to normal clojure destructuring (due to using proteus.Container to fake mutable variables).
+
+``` clojure
+(let [{:keys [a b]} {:a 1 :b 2}]
+  [a b])
+;; 123 ns
+
+(s/match {:a 1 :b 2}
+         (s/keys a b) [a b])
+;; 648 ns :(
+```
+
+Other performance disparities are less clear.
+
+``` clojure
+(defn f [pairs]
+  (if-let [[x y & more] pairs]
+    (cons (clojure.core/+ x y) (f more))
+    nil))
+
+(f (range 10))
+;; 3.5 us
+
+(defn g [pairs]
+  (match pairs
+         [^x _ ^y _ ^more (& _)] (cons (clojure.core/+ x y) (g more))
+         [] nil))
+
+(g (range 10))
+;; 7.1 us
+
+(defn h [pairs]
+  (match pairs
+         (letp [p (case [^x _ ^y _ (& p)] (cons (clojure.core/+ x y) p)
+                        [] nil)]
+               p)))
+
+(h (range 10))
+;; 9.7 µs
+```
 
 ## License
 

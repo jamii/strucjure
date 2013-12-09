@@ -52,6 +52,14 @@
      (->Let ~(for-map [[name pattern] (partition 2 names&patterns)] `'~name `(pattern ~pattern))
             (case ~@patterns&outputs))))
 
+(defn keys* [& symbols]
+  (for-map [symbol symbols]
+           (keyword (str symbol))
+           (->Name symbol (->Any))))
+
+(defmacro keys [& symbols]
+  `(keys* ~@(for [symbol symbols] `'~symbol)))
+
 (defmacro match [input & patterns&outputs]
   (let [pattern (eval `(case ~@patterns&outputs))]
     `(let [~view/input ~input] ~(view/view-top pattern))))

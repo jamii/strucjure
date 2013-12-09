@@ -14,7 +14,9 @@ Strucjure is a library for describing stuff in an executable manner. It gives yo
 
 ## Concision
 
-Pattern matching tends to be far more concise than imperative style chains of boolean tests.
+Pattern matching tends to be far more concise than imperative style chains of boolean tests which we still use in clojure every day.
+
+Compare the imperative approach...
 
 ``` java
 private void adjustAfterInsertion(Node n) {
@@ -64,6 +66,8 @@ private void adjustAfterInsertion(Node n) {
         setColor((Node) root, Color.black);
     }
 ```
+
+...to the declarative approach.
 
 ``` clojure
 (defrecord Red [value left right])

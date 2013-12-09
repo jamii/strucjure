@@ -1,4 +1,4 @@
-(defproject strucjure "0.4.0-SNAPSHOT"
+(defproject strucjure "0.4.0"
   :description "Pattern-matching, parsing and generic traversals via PEGs"
   :url "http://github.com/jamii/strucjure"
   :license {:name "Eclipse Public License - v 1.0"

@@ -12,10 +12,6 @@ In idiomatic clojure data is not hidden behind classes and methods, but instead 
 
 Strucjure is a library for describing stuff in an executable manner. It gives you pattern matching (with first-class patterns), validators, parsers, walks and lenses (and eventually generators). The shape of your data is immediately apparent from your code and errors are clearly reported.
 
-``` clojure
-[strucjure "0.4.0"]
-```
-
 ## Concision
 
 Pattern matching tends to be far more concise than imperative style chains of boolean tests which we still use in clojure every day.

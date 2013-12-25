@@ -81,13 +81,12 @@
 
   ;; records
 
-  ;; TODO: this matches to (Bar. 1 2) instead of expected (Foo. 1 2)
-  ;;  (t/is (= (match (Foo. 1 2)
-  ;;                (Bar. 1 2) :fail
-  ;;                (Foo. :a :b) :fail
-  ;;                (Foo. 1 2) :ok)
-  ;;         :ok
-  ;;         ))
+   (t/is (= (match (Foo. 1 2)
+                 (Bar. 1 2) :fail
+                 (Foo. :a :b) :fail
+                 (Foo. 1 2) :ok)
+          :ok
+          ))
 
   (t/is (= (match (Foo. 1 2)
                 (->Foo 1 2) :ok)

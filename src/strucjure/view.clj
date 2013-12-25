@@ -148,10 +148,7 @@
       (let-input (seq ~input) ~(seq->view (seq this) info)))
 
    [IPersistentMap]
-   (map->view this info)
-
-   [IRecord]
-   `(do (check (instance? ~(class this) ~input))
+   `(do ~(when (instance? IRecord this) `(check (instance? ~(class this) ~input) ~this))
       ~(map->view this info))))
 
 ;; LOGICAL PATTERNS

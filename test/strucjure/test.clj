@@ -1,5 +1,5 @@
 (ns strucjure.test
-  (:refer-clojure :exclude [with-meta * + or and name case])
+  (:refer-clojure :exclude [with-meta * + or and name case keys])
   (require [clojure.test :refer [deftest] :as t]
            [plumbing.core :refer [for-map aconcat map-vals]]
            [strucjure.pattern :refer :all]

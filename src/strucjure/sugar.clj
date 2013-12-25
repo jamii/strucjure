@@ -1,5 +1,5 @@
 (ns strucjure.sugar
-  (:refer-clojure :exclude [with-meta * + or and name case])
+  (:refer-clojure :exclude [with-meta * + or and name case keys])
   (:require [plumbing.core :refer [fnk for-map aconcat]]
             [strucjure.pattern :as pattern :refer [->Rest ->Any ->Is ->Guard ->Name ->Or ->And ->Repeated ->WithMeta ->Output ->Let ->Refer ->Trace]]
             [strucjure.view :as view])
